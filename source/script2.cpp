@@ -1458,7 +1458,7 @@ FResult SetWorkingDir(LPCTSTR aNewDir)
 	// Update in 2018: The reason it wouldn't by default is that "C:" is actually a reference to the
 	// the current directory if it's on C: drive, otherwise a reference to the path contained by the
 	// env var "=C:".  Similarly, "C:x" is a reference to "x" inside that directory.
-	// For details, see https://blogs.msdn.microsoft.com/oldnewthing/20100506-00/?p=14133
+	// For details, see https://devblogs.microsoft.com/oldnewthing/20100506-00/?p=14133
 	// Although the override here creates inconsistency between SetWorkingDir and everything else
 	// that can accept "C:", it is most likely what the user wants, and now there's also backward-
 	// compatibility to consider since this workaround has been in place since 2006.
