@@ -2733,7 +2733,7 @@ void Debugger::Buffer::WriteFileURI(LPCWSTR aPath)
 	int c;
 	for (auto ptr = aPath; c = *ptr; ++ptr)
 	{
-		if (cisalnum(c) || strchr("-_.!~*()/", c))
+		if (cisalnum(c) || _tcschr(_T("-_.!~*'()/"), c))
 		{
 			mData[mDataUsed++] = (char)c;
 		}
