@@ -3604,11 +3604,11 @@ void ChangeHookState(Hotkey *aHK[], int aHK_count, HookType aWhichHook, HookType
 					// The hotkey's ModifierVK is itself a modifier.
 					SetModifierAsPrefix(hk.mModifierVK, 0, true);
 				else
-				{
 					kvk[hk.mModifierVK].used_as_prefix = PREFIX_ACTUAL;
-					if (hk.mNoSuppress & NO_SUPPRESS_PREFIX)
-						kvk[hk.mModifierVK].no_suppress |= AT_LEAST_ONE_COMBO_HAS_TILDE;
-				}
+				// Record the use of ~ on this prefix even if it's a standard modifier which wouldn't normally be
+				// suppressed, since this also affects whether the key's own hotkeys fire on press vs. release.
+				if (hk.mNoSuppress & NO_SUPPRESS_PREFIX)
+					kvk[hk.mModifierVK].no_suppress |= AT_LEAST_ONE_COMBO_HAS_TILDE;
 			}
 			else //if (hk.mModifierSC)
 			{
@@ -3618,13 +3618,13 @@ void ChangeHookState(Hotkey *aHK[], int aHK_count, HookType aWhichHook, HookType
 				else
 				{
 					ksc[hk.mModifierSC].used_as_prefix = PREFIX_ACTUAL;
-					if (hk.mNoSuppress & NO_SUPPRESS_PREFIX)
-						ksc[hk.mModifierSC].no_suppress |= AT_LEAST_ONE_COMBO_HAS_TILDE;
 					// For some scan codes this was already set above.  But to support explicit scan code prefixes,
 					// such as "SC118 & SC122::MsgBox", make sure it's set for every prefix that uses an explicit
 					// scan code:
 					ksc[hk.mModifierSC].sc_takes_precedence = true;
 				}
+				if (hk.mNoSuppress & NO_SUPPRESS_PREFIX)
+					ksc[hk.mModifierSC].no_suppress |= AT_LEAST_ONE_COMBO_HAS_TILDE;
 			}
 			// Insert this hotkey at the front of the linked list of hotkeys which use this suffix key.
 			hk.mNextHotkey = pThisKey->first_hotkey;
