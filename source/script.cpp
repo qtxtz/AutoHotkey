@@ -5119,7 +5119,7 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 	case ACT_FINALLY:
 		bool expected = false;
 		Line *parent = mPendingRelatedLine;
-		if (parent->mActionType == ACT_BLOCK_BEGIN) // For mPendingRelatedLine, this means an entire block preceding this line.
+		if (parent && parent->mActionType == ACT_BLOCK_BEGIN) // For mPendingRelatedLine, this means an entire block preceding this line.
 			parent = parent->mParentLine;
 		for (;; parent = parent->mParentLine)
 		{
