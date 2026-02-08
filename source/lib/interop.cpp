@@ -516,9 +516,9 @@ BIF_DECL(BIF_StrGetPut) // BIF_DECL(BIF_StrGet), BIF_DECL(BIF_StrPut)
 			// would convert more than necessary and we'd still have to recalculate the
 			// length.  So find the exact length up front:
 			if (encoding == CP_UTF16)
-				length = wcsnlen((LPWSTR)address, length);
+				length = wcsnlen((LPWSTR)address, (size_t)length);
 			else
-				length = strnlen((LPSTR)address, length);
+				length = strnlen((LPSTR)address, (size_t)length);
 		}
 		if (encoding != UorA(CP_UTF16, CP_ACP))
 		{
@@ -575,7 +575,7 @@ BIF_DECL(BIF_StrGetPut) // BIF_DECL(BIF_StrGet), BIF_DECL(BIF_StrPut)
 		{
 			// No conversion necessary, but we might not want the whole string.
 			// Copy and null-terminate the string; some callers might require it.
-			TokenSetResult(aResultToken, (LPCTSTR)address, length);
+			TokenSetResult(aResultToken, (LPCTSTR)address, (size_t)length);
 		}
 	}
 }
