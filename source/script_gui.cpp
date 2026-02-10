@@ -9286,6 +9286,10 @@ LRESULT CALLBACK GuiWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lPara
 		// menus are always sent to g_hWnd, but it is kept here for symmetry/maintainability:
 		UninitMenuPopup((HMENU)wParam);
 		break;
+	case WM_MENUSELECT:
+		if (g_MenuIsTempModeless)
+			MenuSelectWorkaround(lParam, wParam);
+		break;
 	case WM_NCACTIVATE:
 		if (!wParam && g_MenuIsTempModeless)
 		{
