@@ -673,8 +673,7 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 	}
 #endif
 
-	static auto sMod = LoadLibrary(_T("riched20.dll")); // RichEdit20W
-	//static auto sMod = LoadLibrary(_T("msftedit.dll")); // MSFTEDIT_CLASS (RICHEDIT50W)
+	static auto sMod = LoadLibrary(_T("msftedit.dll"));
 	ErrorBoxParam error;
 	error.text = aErrorText;
 	error.type = aErrorType;
