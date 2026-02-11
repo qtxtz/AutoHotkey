@@ -1326,7 +1326,6 @@ ResultType Script::ExitApp(ExitReasons aExitReason)
 
 
 
-#ifdef RELEASE_SOME_OBJECTS_ON_EXIT
 void ReleaseVarObjects(VarList &aVars)
 {
 	for (int v = 0; v < aVars.mCount; ++v)
@@ -1350,7 +1349,6 @@ void ReleaseStaticVarObjects(FuncList &aFuncs)
 		ReleaseVarObjects(f.mStaticVars);
 	}
 }
-#endif
 
 
 
@@ -1358,10 +1356,6 @@ void Script::TerminateApp(ExitReasons aExitReason, int aExitCode)
 // Note that g_script's destructor takes care of most other cleanup work, such as destroying
 // tray icons, menus, and unowned windows such as ToolTip.
 {
-#ifdef RELEASE_SOME_OBJECTS_ON_EXIT
-	// v2.1: This was disabled rather than updating it to iterate through module variables because
-	// it has always been incomplete (doesn't finalize all objects) and caused unexpected behaviour
-	// (some global or static variables are arbitrarily unset before __delete executes).
 	// L31: Release objects stored in variables, where possible.
 	if (aExitReason != EXIT_CRITICAL) // i.e. Avoid making matters worse if EXIT_CRITICAL.
 	{
@@ -1370,10 +1364,10 @@ void Script::TerminateApp(ExitReasons aExitReason, int aExitCode)
 		g_AllowInterruption = FALSE;
 		g->IsPaused = false;
 
-		ReleaseVarObjects(mVars);
+		for (auto mod = mLastModule; mod; mod = mod->mPrev)
+			ReleaseVarObjects(mod->mVars);
 		ReleaseStaticVarObjects(mFuncs);
 	}
-#endif
 #ifdef CONFIG_DEBUGGER // L34: Exit debugger *after* the above to allow debugging of any invoked __Delete handlers.
 	g_Debugger.Exit(aExitReason);
 #endif
