@@ -12,7 +12,7 @@ ResultType ScriptModule::Invoke(IObject_Invoke_PARAMS_DECL)
 	if (!var && mIsBuiltinModule)
 		// This is a slight hack to support built-in vars which haven't been referenced directly.
 		var = g_script.FindOrAddBuiltInVar(aName, true, nullptr);
-	if (!var || !var->IsExported())
+	if (!var)
 		return ObjectBase::Invoke(IObject_Invoke_PARAMS);
 
 	if (IS_INVOKE_SET && aParamCount == 1)
