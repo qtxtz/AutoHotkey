@@ -2424,9 +2424,14 @@ process_completed_line:
 				return FAIL;
 			goto continue_main_loop;
 		}
-		else if (!mLineParent && ParseImportStatement(buf))
+		else if (!mLineParent)
 		{
-			goto continue_main_loop;
+			switch (ParseImportStatement(buf))
+			{
+			case FAIL: return ScriptError(_T("Invalid import"), buf);
+			case OK: goto continue_main_loop;
+			//default: not an import statement.
+			}
 		}
 
 		// Parse the command, assignment or expression, including any same-line open brace or sub-action

@@ -46,23 +46,109 @@ ResultType Script::ParseModuleDirective(LPCTSTR aName)
 }
 
 
-bool Script::ParseImportStatement(LPTSTR aBuf)
+ResultType Script::ParseImportStatement(LPTSTR aBuf)
 {
 	bool is_export = !_tcsnicmp(aBuf, _T("Export"), 6) && IS_SPACE_OR_TAB(aBuf[6]);
 	if (is_export)
 		aBuf = omit_leading_whitespace(aBuf + 7);
 	if (  !(!_tcsnicmp(aBuf, _T("Import"), 6) && IS_SPACE_OR_TAB(aBuf[6]))  )
-		return false;
+		return CONDITION_FALSE;
 	aBuf = omit_leading_whitespace(aBuf + 7);
+
+	// Return CONDITION_FALSE to try to interpret aBuf as something else.
+	// Return FAIL if this is definitely invalid (caller calls ScriptError).
+	ResultType certainty = CONDITION_FALSE;
+
+	LPTSTR cp = aBuf;
+	LPTSTR mod_name = nullptr, mod_name_end = nullptr;
+	LPTSTR var_name = nullptr, var_name_end = nullptr;
+	LPTSTR names = nullptr, names_end = nullptr;
+	bool import_file = false, import_wildcard = false;
+	if (*cp == '{' || *cp == '*')
+	{
+		if (*cp == '{')
+		{
+			names = cp + 1;
+			// The simple method might allow false positives (e.g. Import {x: "} from ..."}).
+			//cp = _tcschr(cp, '}'); // Should always be found due to GetLineContExpr().
+			cp += FindExprDelim(cp, '}', 1);
+			if (!*cp) // Probably not possible due to GetLineContExpr.
+				return CONDITION_FALSE;
+			names_end = cp++;
+		}
+		else
+			import_wildcard = true;
+		cp = omit_leading_whitespace(cp + 1);
+		if (_tcsnicmp(cp, _T("From"), 4) || !IS_SPACE_OR_TAB(cp[4]))
+			return CONDITION_FALSE;
+		cp = omit_leading_whitespace(cp + 5);
+		certainty = FAIL; // `Import {} From` can't be anything but Import.
+	}
+	if (import_file = (*cp == '"' || *cp == '\''))
+	{
+		mod_name = cp + 1;
+		cp += FindTextDelim(cp, *cp, 1);
+		if (!*cp || cp[1] && !IS_SPACE_OR_TAB(cp[1]))
+			return certainty;
+		mod_name_end = cp++;
+	}
+	else
+	{
+		mod_name = cp;
+		cp = find_identifier_end(cp);
+		if (cp == mod_name || *cp && !IS_SPACE_OR_TAB(*cp))
+			return certainty;
+		mod_name_end = cp;
+		if (*cp)
+			++cp;
+	}
+	if (*cp) // There's a character after the quote or space which terminates the module name/path.
+	{
+		cp = omit_leading_whitespace(cp);
+		if (!_tcsnicmp(cp, _T("as"), 2) && IS_SPACE_OR_TAB(cp[2]))
+		{
+			cp = omit_leading_whitespace(cp + 3);
+			if (!IS_IDENTIFIER_CHAR(*cp))
+				return FAIL;
+			cp = var_name_end = find_identifier_end(var_name = cp);
+			cp = omit_leading_whitespace(cp);
+			certainty = FAIL; // `Import ... as ` can't be anything but Import.
+		}
+		if (*cp == '{' && !names)
+		{
+			names = cp + 1;
+			cp += FindExprDelim(cp, '}', 1);
+			if (!*cp || cp[1])
+				return certainty;
+			names_end = cp;
+		}
+		else if (*cp)
+			return certainty;
+	}
+	else if (mod_name == aBuf) // `Import M`, not `Import {} from M` or `Import "file"`.
+	{
+		// This is currently not done because `Import M` is a valid function call statement
+		// in v2.0.  If ever "Import" becomes a reserved word (perhaps after the script has
+		// opted to disable back-compat features), this can replace the "return" below:
+		//var_name = mod_name;
+		//var_name_end = mod_name_end;
+		return CONDITION_FALSE;
+	}
+
 	auto imp = new ScriptImport();
-	imp->names = SimpleHeap::Alloc(aBuf);
-	imp->mod = nullptr;
+	imp->names = SimpleHeap::Alloc(names, names_end - names);
+	imp->mod_name = SimpleHeap::Alloc(mod_name, mod_name_end - mod_name);
+	if (var_name)
+		imp->var_name = SimpleHeap::Alloc(var_name, var_name_end - var_name);
+	if (import_file)
+		ConvertEscapeSequences(imp->mod_name);
+	imp->wildcard = import_wildcard;
 	imp->is_export = is_export;
 	imp->line_number = mCombinedLineNumber;
 	imp->file_index = mCurrFileIndex;
 	imp->next = mCurrentModule->mImports;
 	mCurrentModule->mImports = imp;
-	return true;
+	return OK;
 }
 
 
@@ -144,78 +230,13 @@ ResultType Script::ResolveImports()
 
 ResultType Script::ResolveImports(ScriptImport &imp)
 {
-	// Set early for code size, in case of error.
-	mCurrLine = nullptr;
-	mCombinedLineNumber = imp.line_number;
-	mCurrFileIndex = imp.file_index;
-
-	LPTSTR cp = imp.names, mod_name, var_name = nullptr, names = nullptr;
-	bool import_file = false;
-	if (*cp == '{' || *cp == '*')
-	{
-		if (*cp == '{')
-		{
-			names = ++cp;
-			cp = _tcschr(cp, '}'); // Should always be found due to GetLineContExpr().
-		}
-		else
-			imp.wildcard = true;
-		cp = omit_leading_whitespace(cp + 1);
-		if (_tcsnicmp(cp, _T("From"), 4) || !IS_SPACE_OR_TAB(cp[4]))
-			return ScriptError(_T("Invalid import"), imp.names);
-		cp = omit_leading_whitespace(cp + 5);
-	}
-	if (import_file = (*cp == '"' || *cp == '\''))
-	{
-		mod_name = cp + 1;
-		cp += FindTextDelim(cp, *cp, 1);
-		if (!*cp || cp[1] && !IS_SPACE_OR_TAB(cp[1]))
-			return ScriptError(_T("Invalid import"), imp.names);
-		*cp++ = '\0';
-		ConvertEscapeSequences(mod_name);
-  	}
-	else
-	{
-		mod_name = cp;
-		cp = find_identifier_end(cp);
-		if (cp == mod_name || *cp && !IS_SPACE_OR_TAB(*cp))
-			return ScriptError(_T("Invalid import"), imp.names);
-		if (*cp)
-			*cp++ = '\0';
-	}
-	if (*cp) // There's a character after the quote or space which terminates the module name/path.
-	{
-		cp = omit_leading_whitespace(cp);
-		auto c = *cp;
-		if (!_tcsnicmp(cp, _T("as"), 2) && IS_SPACE_OR_TAB(cp[2]))
-		{
-			var_name = omit_leading_whitespace(cp + 3);
-			if (IS_IDENTIFIER_CHAR(*var_name))
-			{
-				cp = find_identifier_end(var_name);
-				c = *cp;
-				*cp = '\0';
-				while (IS_SPACE_OR_TAB(c)) c = *++cp;
-			}
-		}
-		if (c == '{' && !names)
-			names = cp + 1;
-		else if (c)
-		{
-			*cp = c;
-			return ScriptError(_T("Invalid import"), cp);
-		}
-	}
-	else if (mod_name == imp.names) // `Import M`, not `Import {} from M` or `Import "file"`.
-		var_name = mod_name;
-
 	int at;
-	if (  !(imp.mod = mModules.Find(mod_name, &at))  )
+	if (  !(imp.mod = mModules.Find(imp.mod_name, &at))  )
 	{
 		FileIndexType file_index;
-		switch (FindModuleFileIndex(mod_name, file_index))
+		switch (FindModuleFileIndex(imp.mod_name, file_index))
 		{
-		default:	return ScriptError(_T("Module not found"), mod_name);
+		default:	return ScriptError(_T("Module not found"), imp.mod_name);
 		case FAIL:	return FAIL;
 		case OK:	break;
 		}
@@ -232,7 +253,7 @@ ResultType Script::ResolveImports(ScriptImport &imp)
 			auto cur_mod = mCurrentModule;
 			auto last_mod = mLastModule;
 			mLastModule = nullptr; // Start a new chain.
-			imp.mod = mCurrentModule = new ScriptModule(mod_name);
+			imp.mod = mCurrentModule = new ScriptModule(imp.mod_name);
 			imp.mod->mSelfFileIndex = file_index;
 			if (!mModules.Insert(imp.mod, at))
 				return MemoryError();
@@ -247,18 +268,23 @@ ResultType Script::ResolveImports(ScriptImport &imp)
 		}
 	}
 
-	if (var_name)
+	// Set in case of error.
+	mCurrLine = nullptr;
+	mCombinedLineNumber = imp.line_number;
+	mCurrFileIndex = imp.file_index;
+
+	if (imp.var_name)
 	{
 		// Do not reuse mSelf or a previous Var created by an import even if mod_name == var_name,
 		// since the exported status of the Var (VAR_EXPORTED) shouldn't propagate between modules.
-		auto var = AddNewImportVar(var_name, imp.mod->mSelf, imp.mod, imp.is_export);
+		auto var = AddNewImportVar(imp.var_name, imp.mod->mSelf, imp.mod, imp.is_export);
 		if (!var)
 			return FAIL;
 	}
 
-	if (names)
+	if (imp.names)
 	{
-		for (cp = names; *(cp = omit_leading_whitespace(cp)) != '}'; ++cp)
+		for (LPTSTR cp = imp.names; *(cp = omit_leading_whitespace(cp)); ++cp)
 		{
 			TCHAR c;
 			if (*cp == '*')
@@ -268,7 +294,8 @@ ResultType Script::ResolveImports(ScriptImport &imp)
 			}
 			else
 			{
-				c = *(cp = find_identifier_end(var_name = mod_name = cp));
+				LPTSTR var_name = cp, mod_name = cp;
+				c = *(cp = find_identifier_end(cp));
 				*cp = '\0';
 				while (IS_SPACE_OR_TAB(c)) c = *++cp; // Find next non-whitespace.
 				auto exported = imp.mod->mVars.Find(mod_name);
@@ -286,7 +313,7 @@ ResultType Script::ResolveImports(ScriptImport &imp)
 				if (!imported)
 					return FAIL;
 			}
-			if (c == '}')
+			if (!c)
 				break;
 			if (c != ',')
 			{
