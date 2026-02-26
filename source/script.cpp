@@ -4004,6 +4004,13 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 		return ParseModuleDirective(parameter);
 	}
 
+	if (IS_DIRECTIVE_MATCH(_T("#Import")))
+	{
+		if (ParseImportStatement(parameter, true) != OK)
+			return ScriptError(_T("Invalid import"), aBuf);
+		return CONDITION_TRUE;
+	}
+
 	if (IS_DIRECTIVE_MATCH(_T("#StructPack")))
 	{
 		int i = parameter ? IsNumeric(parameter, FALSE, FALSE) ? ATOI(parameter) : -1 : 0;

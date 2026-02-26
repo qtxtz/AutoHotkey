@@ -46,14 +46,17 @@ ResultType Script::ParseModuleDirective(LPCTSTR aName)
 }
 
 
-ResultType Script::ParseImportStatement(LPTSTR aBuf)
+ResultType Script::ParseImportStatement(LPTSTR aBuf, bool aDirective)
 {
 	bool is_export = !_tcsnicmp(aBuf, _T("Export"), 6) && IS_SPACE_OR_TAB(aBuf[6]);
 	if (is_export)
 		aBuf = omit_leading_whitespace(aBuf + 7);
-	if (  !(!_tcsnicmp(aBuf, _T("Import"), 6) && IS_SPACE_OR_TAB(aBuf[6]))  )
-		return CONDITION_FALSE;
-	aBuf = omit_leading_whitespace(aBuf + 7);
+	if (!aDirective)
+	{
+		if (!(!_tcsnicmp(aBuf, _T("Import"), 6) && IS_SPACE_OR_TAB(aBuf[6])))
+			return CONDITION_FALSE;
+		aBuf = omit_leading_whitespace(aBuf + 7);
+	}
 
 	// Return CONDITION_FALSE to try to interpret aBuf as something else.
 	// Return FAIL if this is definitely invalid (caller calls ScriptError).
@@ -127,12 +130,9 @@ ResultType Script::ParseImportStatement(LPTSTR aBuf)
 	}
 	else if (mod_name == aBuf) // `Import M`, not `Import {} from M` or `Import "file"`.
 	{
-		// This is currently not done because `Import M` is a valid function call statement
-		// in v2.0.  If ever "Import" becomes a reserved word (perhaps after the script has
-		// opted to disable back-compat features), this can replace the "return" below:
-		//var_name = mod_name;
-		//var_name_end = mod_name_end;
-		return CONDITION_FALSE;
+		// Interpret `Import M` as a function call statement, as in v2.0.
+		if (!aDirective)
+			return CONDITION_FALSE;
 	}
 
 	auto imp = new ScriptImport();
