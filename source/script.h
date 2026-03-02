@@ -2153,7 +2153,6 @@ private:
 #endif
 	FuncList mFuncs;
 
-	ScriptModuleList mModules;
 	ScriptModule mBuiltinModule { _T("AHK") };
 	ScriptModule mDefaultModule { _T("__Main") };
 	ScriptModule *mCurrentModule = &mBuiltinModule;
@@ -2389,12 +2388,13 @@ public:
 	VarList *GlobalVars() { return &CurrentModule()->mVars; }
 	
 	ScriptModule *CurrentModule() { return g->CurrentFunc ? g->CurrentFunc->mModule : mCurrentModule; }
+	ScriptModule *FindDirectiveModule(LPCTSTR aName, ScriptModule *aList);
 	ResultType ParseModuleDirective(LPCTSTR aName);
 	ResultType ParseImportStatement(LPTSTR aBuf, bool aDirective = false);
 	ResultType CloseCurrentModule();
 	ScriptModule *OpenNewModule(LPCTSTR aName);
 	ResultType ResolveImports(ScriptModule *aTerminator = nullptr);
-	ResultType ResolveImports(ScriptImport &aImport);
+	ResultType ResolveImports(ScriptImport &aImport, ScriptModule *aDirectiveList);
 	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport);
 	Var *FindImportedVar(LPCTSTR aVarName);
 

@@ -26,10 +26,22 @@ ResultType ScriptModule::Invoke(IObject_Invoke_PARAMS_DECL)
 }
 
 
+ScriptModule *Script::FindDirectiveModule(LPCTSTR aName, ScriptModule *aList)
+{
+	for (auto mod = aList; mod && !mod->IsFileModule(); mod = mod->mPrev)
+		if (!_tcsicmp(aName, mod->mName))
+			return mod;
+	if (!_tcsicmp(aName, _T("AHK")))
+		return &mBuiltinModule;
+	if (!_tcsicmp(aName, _T("__Main")))
+		return &mDefaultModule;
+	return nullptr;
+}
+
+
 ResultType Script::ParseModuleDirective(LPCTSTR aName)
 {
-	int at;
-	auto mod = mModules.Find(aName, &at);
+	auto mod = FindDirectiveModule(aName, mLastModule);
 	if (!mod)
 	{
 		mod = OpenNewModule(SimpleHeap::Alloc(aName));
@@ -38,8 +50,6 @@ ResultType Script::ParseModuleDirective(LPCTSTR aName)
 		mod->Warn_LocalSameAsGlobal = mCurrentModule->Warn_LocalSameAsGlobal;
 		mod->Warn_Unreachable = mCurrentModule->Warn_Unreachable;
 		mod->Warn_VarUnset = mCurrentModule->Warn_VarUnset;
-		if (!mModules.Insert(mod, at))
-			return MemoryError();
 	}
 	if (mod != mCurrentModule)
 	{
@@ -225,22 +235,28 @@ Var *Script::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, 
 
 ResultType Script::ResolveImports(ScriptModule *aTerminator)
 {
-	for (mCurrentModule = mLastModule; mCurrentModule != aTerminator; mCurrentModule = mCurrentModule->mPrev)
+	ScriptModule *directive_list = nullptr;
+	for (auto mod = mCurrentModule = mLastModule; mod != aTerminator; mod = mCurrentModule = mCurrentModule->mPrev)
 	{
-		for (auto imp = mCurrentModule->mImports; imp; imp = imp->next)
+		if (!directive_list && !mod->IsFileModule())
+			directive_list = mod;
+
+		for (auto imp = mod->mImports; imp; imp = imp->next)
 		{
-			if (!imp->mod && !ResolveImports(*imp))
+			if (!imp->mod && !ResolveImports(*imp, directive_list))
 				return FAIL;
 		}
+
+		if (mod->IsFileModule())
+			directive_list = nullptr;
 	}
 	return OK;
 }
 
 
-ResultType Script::ResolveImports(ScriptImport &imp)
+ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveList)
 {
-	int at;
-	if (  !(imp.mod = mModules.Find(imp.mod_name, &at))  )
+	if (  !(imp.mod = FindDirectiveModule(imp.mod_name, aDirectiveList))  )
 	{
 		FileIndexType file_index;
 		switch (FindModuleFileIndex(imp.mod_name, file_index, imp.file_index))

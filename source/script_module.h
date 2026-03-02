@@ -42,6 +42,8 @@ public:
 	WarnMode Warn_Unreachable = WARNMODE_ON;
 	WarnMode Warn_VarUnset = WARNMODE_ON;
 
+	bool IsFileModule() const { return mSelfFileIndex != ABSOLUTE_MAX_SOURCE_FILES; }
+
 	bool HasFileIndex(FileIndexType aFile);
 	ResultType AddFileIndex(FileIndexType aFile);
 
