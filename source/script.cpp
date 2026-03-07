@@ -3993,7 +3993,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 
 	if (IS_DIRECTIVE_MATCH(_T("#Module")))
 	{
-		if (mLineParent || mClassObjectCount)
+		if (mLineParent || mClassObjectCount || mPendingHotkey)
 			return ScriptError(ERR_UNEXPECTED_DIRECTIVE, aBuf);
 		if (!parameter)
 			return ScriptError(ERR_PARAM1_REQUIRED);
