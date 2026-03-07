@@ -3996,7 +3996,6 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 			return ScriptError(ERR_UNEXPECTED_DIRECTIVE, aBuf);
 		if (!parameter)
 			return ScriptError(ERR_PARAM1_REQUIRED);
-		parameter = strip_quote_marks(parameter);
 		return ParseModuleDirective(parameter);
 	}
 

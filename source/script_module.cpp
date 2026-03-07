@@ -44,6 +44,9 @@ ResultType Script::ParseModuleDirective(LPCTSTR aName)
 	auto mod = FindDirectiveModule(aName, mLastModule);
 	if (!mod)
 	{
+		if (!Var::ValidateName(aName, DISPLAY_MODULE_ERROR))
+			return FAIL;
+
 		mod = CreateModule(SimpleHeap::Alloc(aName));
 		mod->mOuterFileIndex = mCurrFileIndex;
 
