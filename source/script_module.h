@@ -3,7 +3,7 @@
 
 struct ScriptImport
 {
-	LPTSTR names = nullptr, mod_name = nullptr, var_name = nullptr;
+	LPTSTR names = nullptr, mod_path = nullptr, mod_name = nullptr, var_name = nullptr;
 	ScriptModule *mod = nullptr;
 	ScriptImport *next = nullptr;
 	LineNumberType line_number = 0;

@@ -130,13 +130,21 @@ ResultType Script::ParseImportDirective(LPTSTR aBuf)
 
 	auto imp = new ScriptImport();
 	imp->names = SimpleHeap::Alloc(names, names_end - names);
-	imp->mod_name = SimpleHeap::Alloc(mod_name, mod_name_end - mod_name);
+	imp->mod_path = SimpleHeap::Alloc(mod_name, mod_name_end - mod_name);
+	if (import_file)
+	{
+		for (cp = mod_name_end - 1; cp > mod_name && IS_IDENTIFIER_CHAR(*cp); --cp);
+		if (*cp == ':') // The last non-word character is ':'.
+		{
+			imp->mod_path[cp - mod_name] = '\0';
+			imp->mod_name = imp->mod_path + (cp - mod_name) + 1;
+		}
+		ConvertEscapeSequences(imp->mod_path);
+	}
 	if (var_name)
 		imp->var_name = SimpleHeap::Alloc(var_name, var_name_end - var_name);
 	else if (!import_file)
-		imp->var_name = imp->mod_name;
-	if (import_file)
-		ConvertEscapeSequences(imp->mod_name);
+		imp->var_name = imp->mod_path;
 	imp->wildcard = import_wildcard;
 	imp->is_export = is_export;
 	imp->line_number = mCombinedLineNumber;
@@ -232,22 +240,40 @@ ResultType Script::ResolveImports(ScriptModule *aTerminator)
 
 ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveList)
 {
-	if (  !(imp.mod = FindDirectiveModule(imp.mod_name, aDirectiveList))  )
+	if (!imp.mod_name)
 	{
+		// #Import mod_path
+		imp.mod = FindDirectiveModule(imp.mod_path, aDirectiveList);
+	}
+	if (!imp.mod)
+	{
+		// #Import mod_path
+		// #Import "mod_path"
+		// #Import "mod_path:mod_name"
+		// #Import ":mod_name"
 		FileIndexType file_index;
-		switch (FindModuleFileIndex(imp.mod_name, file_index, imp.file_index))
+		switch (FindModuleFileIndex(imp.mod_path, file_index, imp.file_index))
 		{
-		default:	return ScriptError(_T("Module not found"), imp.mod_name);
 		case FAIL:	return FAIL;
 		case OK:	break;
+		default:
+			mCurrLine = nullptr;
+			mCurrFileIndex = imp.file_index;
+			mCombinedLineNumber = imp.line_number;
+			return ScriptError(_T("Module not found"), imp.mod_path);
 		}
+		ScriptModule *new_last = nullptr;
 		// Search by file index, which corresponds to the file's full path.
 		for (auto m = mLastModule; m; m = m->mPrev)
+		{
 			if (m->mSelfFileIndex == file_index)
 			{
 				imp.mod = m;
 				break;
 			}
+			if (!new_last && m->mOuterFileIndex == file_index)
+				new_last = m;
+		}
 		if (!imp.mod)
 		{
 			auto path = Line::sSourceFile[file_index];
@@ -256,11 +282,24 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 			imp.mod->mSelfFileIndex = file_index;
 			if (!LoadIncludedFile(path, false, false))
 				return FAIL;
+			new_last = mLastModule;
 			if (!CloseCurrentModule())
 				return FAIL;
 			if (!ResolveImports(imp.mod->mPrev)) // Resolve imports in all modules that were just included.
 				return FAIL;
 			mCurrentModule = cur_mod;
+		}
+		if (imp.mod && imp.mod_name && *imp.mod_name) // #Import "file:submodule"
+		{
+			// Now that "file" has been resolved and loaded, resolve "submodule".
+			imp.mod = FindDirectiveModule(imp.mod_name, new_last);
+			if (!imp.mod)
+			{
+				mCurrLine = nullptr;
+				mCurrFileIndex = imp.file_index;
+				mCombinedLineNumber = imp.line_number;
+				return ScriptError(_T("Module not found"), imp.mod_name);
+			}
 		}
 	}
 
@@ -449,6 +488,12 @@ LPCWSTR Script::InitModuleSearchPath()
 
 ResultType Script::FindModuleFileIndex(LPCTSTR aName, FileIndexType &aFileIndex, FileIndexType aLocalFileIndex)
 {
+	if (!*aName)
+	{
+		aFileIndex = mCurrentModule->IsFileModule() ? mCurrentModule->mSelfFileIndex : mCurrentModule->mOuterFileIndex;
+		return OK;
+	}
+
 	if (*aName == '*') // *Resource name or stdin.
 		return SourceFileIndex(aName, aFileIndex);
 
