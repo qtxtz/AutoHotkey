@@ -269,9 +269,9 @@ BIF_DECL(BIF_GetMethod)
 
 BIF_DECL(BIF_StructFromPtr)
 {
-	Object *base = dynamic_cast<Object *>(ParamIndexToObject(0));
-	Object *proto = base ? dynamic_cast<Object *>(base->GetOwnPropObj(_T("Prototype"))) : nullptr;
-	if (!proto || proto->LockStructSize() == 0)
+	auto class_ = ParamIndexToObject(0);
+	auto proto = class_ && class_->IsOfType(Object::sPrototype) ? ((Object*)class_)->ClassGetPrototype() : nullptr;
+	if (!proto || !proto->IsDerivedFrom(Object::sStructPrototype) || proto->LockStructSize() == 0)
 		_f_throw_param(0);
 	auto ptr = (UINT_PTR)ParamIndexToInt64(1);
 	if (ptr < 65536)

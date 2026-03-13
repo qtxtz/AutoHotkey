@@ -116,15 +116,19 @@ Object *Object::Create(ExprTokenType *aParam[], int aParamCount, ResultToken *ap
 	return obj;
 }
 
+Object *Object::CreateStruct()
+{
+	Object *obj = new Object();
+	obj->mFlags |= CannotOwnProps;
+	obj->SetBase(Object::sStructPrototype);
+	return obj;
+}
+
 Object *Object::CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken)
 {
-	auto obj = Create();
-	if (!obj)
-	{
-		aResultToken.MemoryError();
-		return nullptr;
-	}
-	obj->mFlags |= NoCallDelete;
+	Object *obj = new Object();
+	obj->mFlags |= CannotOwnProps | NoCallDelete;
+	obj->SetBase(Object::sStructPrototype);
 	if (!obj->SetBase(aBase, aResultToken))
 	{
 		obj->Release();
@@ -796,7 +800,7 @@ ResultType Object::SetProperty(ResultToken &aResultToken, int aFlags, name_t aNa
 
 	if (this != that)
 	{
-		if (aFlags & IF_NO_NEW_PROPS)
+		if ((aFlags & IF_NO_NEW_PROPS) || (mFlags & CannotOwnProps))
 			return INVOKE_NOT_HANDLED;
 		if (aParam[0]->symbol == SYM_MISSING)
 			return OK; // No action needed for x.y := unset.
@@ -917,6 +921,23 @@ ResultType Object::SetTypedValue(ResultToken &aResultToken, int aFlags, name_t a
 	if (aProp.item_count || aProp.class_object)
 		return aResultToken.Error(ERR_PROPERTY_READONLY, aName);
 	return SetValueOfTypeAtPtr(aProp.type, ptr, aValue, aResultToken);
+}
+
+
+void Object::StructGet(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
+{
+	switch (aID)
+	{
+	case M_Struct_Ptr: _o_return(DataPtr());
+	case M_Struct_Size: _o_return(DataSize());
+	}
+}
+
+
+BIF_DECL(NewStruct)
+{
+	Object *obj = Object::CreateStruct();
+	obj->New(aResultToken, aParam, aParamCount);
 }
 
 
@@ -1187,6 +1208,22 @@ Object *Object::GetNativeBase()
 	for (base = mBase; base; base = base->mBase)
 		if (base->IsNativeClassPrototype())
 			return base;
+	return nullptr;
+}
+
+
+Object *Object::ClassGetPrototype()
+{
+	if (IObject *p = GetOwnPropObj(_T("Prototype")))
+	{
+		// A valid prototype always has exactly the vftbl of Object::sPrototype.
+		// This produces smaller and faster code than dynamic_cast<Object*>().
+		// Callers want to be sure this is really an Object* and a Prototype,
+		// not something odd like {Prototype: Map()} or {Prototype: RECT()}.
+		if (*(void**)p == *(void**)(IObject*)Object::sPrototype
+			&& ((Object*)p)->IsClassPrototype())
+			return (Object*)p;
+	}
 	return nullptr;
 }
 
@@ -1627,9 +1664,10 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 	size_t psize = 0, palign = 0;
 	if (aClass)
 	{
-		if (auto proto = dynamic_cast<Object*>(aClass->GetOwnPropObj(_T("Prototype"))))
+		auto proto = aClass->ClassGetPrototype();
+		if (proto && proto->IsDerivedFrom(Object::sStructPrototype))
 		{
-			if (auto psi = proto->GetStructInfo())
+			if (auto psi = ((Object*)proto)->GetStructInfo())
 			{
 				psize = psi->size;
 				palign = psi->align;
@@ -1761,6 +1799,8 @@ ResultType FillPropertyFlags(IObject *aObj, bool aSetter, Property &aProp, Resul
 
 void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
+	if (mFlags & CannotOwnProps)
+		_o_throw_type(_T("Object"), ExprTokenType(this));
 	auto name = ParamIndexToString(0, _f_number_buf);
 	if (!*name)
 		_o_throw_param(0 + aID);
@@ -2008,13 +2048,7 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 	{
 		if (!mNested[i]) // Possible in case of redefinition via DefineProp.
 			continue;
-		// TODO: support native types other than Object
-		auto nested = Object::Create();
-		if (!nested)
-		{
-			result = aResultToken.MemoryError();
-			break;
-		}
+		auto nested = CreateStruct();
 		nested->SetDataPtr(data_ptr + offsets[i-1]);
 		ExprTokenType prop_class { mNested[i] }, *pcarg {&prop_class};
 		result = nested->New(aResultToken, &pcarg, 1, this);
@@ -2056,7 +2090,7 @@ ResultType Object::NestedSparseInit(ResultToken& aResultToken, TypedProperty& aP
 	ASSERT(!mNested || !mNested[aProp.object_index]);
 	if (!NestedSparseInit(aResultToken))
 		return FAIL;
-	auto proto = dynamic_cast<Object*>(aProp.class_object->GetOwnPropObj(_T("Prototype")));
+	auto proto = aProp.class_object->ClassGetPrototype();
 	if (!proto)
 		return INVOKE_NOT_HANDLED;
 	auto nested = CreateStructPtr(aPtr, proto, aResultToken);
@@ -3675,6 +3709,13 @@ ObjectMember PropRef::sMembers[]
 };
 
 
+ObjectMember Object::sStructMembers[]
+{
+	Object_Member(Ptr, StructGet, M_Struct_Ptr, IT_GET),
+	Object_Member(Size, StructGet, M_Struct_Size, IT_GET)
+};
+
+
 
 struct ClassDef
 {
@@ -3803,8 +3844,11 @@ void Object::CreateRootPrototypes()
 		}},
 		{_T("Module"), &ScriptModule::sPrototype},
 		{_T("PropRef"), &PropRef::sPrototype, {PropRef_Call, 3, 3}, PropRef::sMembers, _countof(PropRef::sMembers)},
+		{_T("Struct"), &sStructPrototype, NewStruct, sStructMembers, _countof(sStructMembers)},
 		{_T("VarRef"), &sVarRefPrototype, no_ctor, VarRef::sMembers, _countof(VarRef::sMembers)}
 	});
+
+	sStructClass = (Object*)g_script.FindGlobalVar(_T("Struct"), 6)->Object();
 
 	GuiControlType::DefineControlClasses();
 	DefineComPrototypeMembers();
@@ -3820,10 +3864,12 @@ Object *Func::sPrototype;
 Object *Object::sPrototype;
 
 Object *Object::sClassPrototype;
+Object *Object::sStructPrototype;
 Object *Array::sPrototype;
 Object *Map::sPrototype;
 
 Object *Object::sClass;
+Object *Object::sStructClass;
 
 Object *Closure::sPrototype;
 Object *BoundFunc::sPrototype;
@@ -3947,7 +3993,7 @@ BIF_DECL(Class_New)
 		++aParam, --aParamCount;
 	}
 	Object *base_class = obj0 ? dynamic_cast<Object *>(obj0) : ParamIndexIsOmitted(0) ? Object::sClass : dynamic_cast<Object *>(ParamIndexToObject(0));
-	Object *base_proto = base_class ? dynamic_cast<Object *>(base_class->GetOwnPropObj(_T("Prototype"))) : nullptr;
+	Object *base_proto = base_class ? base_class->ClassGetPrototype() : nullptr;
 	if (!base_proto)
 		return (void)aResultToken.ParamError(obj0 ? 0 : 1, aParam[0], _T("Class"));
 	if (aParamCount)

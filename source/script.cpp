@@ -1533,7 +1533,7 @@ bool Script::IsFunctionDefinition(LPTSTR aBuf, LPTSTR aNextBuf)
 
 
 
-inline LPTSTR IsClassDefinition(LPTSTR aBuf, TCHAR *aExport)
+inline LPTSTR IsClassDefinition(LPTSTR aBuf, TCHAR *aExport, bool &aStruct)
 {
 	if (aExport) // Export is permitted.
 	{
@@ -1550,9 +1550,13 @@ inline LPTSTR IsClassDefinition(LPTSTR aBuf, TCHAR *aExport)
 				*aExport = 'E'; // Non-default export.
 		}
 	}
-	if (_tcsnicmp(aBuf, _T("Class"), 5) || !IS_SPACE_OR_TAB(aBuf[5])) // i.e. it's not "Class" followed by a space or tab.
+	if (aStruct = !_tcsnicmp(aBuf, _T("Struct"), 6) && IS_SPACE_OR_TAB(aBuf[6]))
+		aBuf += 7;
+	else if (!_tcsnicmp(aBuf, _T("Class"), 5) && IS_SPACE_OR_TAB(aBuf[5]))
+		aBuf += 6;
+	else
 		return NULL;
-	LPTSTR class_name = omit_leading_whitespace(aBuf + 6);
+	LPTSTR class_name = omit_leading_whitespace(aBuf);
 	if (_tcschr(EXPR_ALL_SYMBOLS, *class_name))
 		// It's probably something like "Class := GetClass()".
 		return NULL;
@@ -2341,15 +2345,19 @@ process_completed_line:
 
 		// Handle this first so that GetLineContExpr() doesn't need to detect it for OTB exclusion:
 		TCHAR class_export_type = 0;
-		if (LPTSTR class_name = IsClassDefinition(buf, mClassObjectCount ? nullptr : &class_export_type))
+		bool is_struct_class;
+		if (LPTSTR class_name = IsClassDefinition(buf, mClassObjectCount ? nullptr : &class_export_type, is_struct_class))
 		{
-			if (g->CurrentFunc)
-				return ScriptError(_T("Functions cannot contain classes."), buf);
-			if (!ClassHasOpenBrace(buf, buf_length, next_buf, next_buf_length))
+			if (ClassHasOpenBrace(buf, buf_length, next_buf, next_buf_length))
+			{
+				if (g->CurrentFunc)
+					return ScriptError(_T("Functions cannot contain classes."), buf);
+				if (!DefineClass(class_name, class_export_type, is_struct_class))
+					return FAIL;
+				goto continue_main_loop;
+			}
+			else if (!is_struct_class)
 				return ScriptError(ERR_MISSING_OPEN_BRACE, buf);
-			if (!DefineClass(class_name, class_export_type))
-				return FAIL;
-			goto continue_main_loop;
 		}
 
 		// Aside from goto/break/continue, anything not already handled above is either an expression
@@ -6161,13 +6169,15 @@ ResultType Script::DefineFunc(LPTSTR aBuf, bool aStatic, FuncDefType aIsInExpres
 
 
 
-ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport)
+ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 {
 	if (mClassObjectCount == MAX_NESTED_CLASSES)
 		return ScriptError(_T("This class definition is nested too deep."), aBuf);
 
 	LPTSTR cp, class_name = aBuf, base_class_name = nullptr;
-	Object *outer_class, *base_class = Object::sClass, *base_prototype = Object::sPrototype;
+	Object *outer_class;
+	Object *base_class = aStruct ? Object::sStructClass : Object::sClass;
+	Object *base_prototype = aStruct ? Object::sStructPrototype : Object::sPrototype;
 	Var *class_var;
 	ExprTokenType token;
 
@@ -6182,8 +6192,7 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport)
 		base_class_name = omit_leading_whitespace(cp + 8);
 		if (!*base_class_name)
 			return ScriptError(_T("Missing class name."), cp);
-		base_class = FindClass(base_class_name);
-		base_prototype = base_class ? (Object *)base_class->GetOwnPropObj(_T("Prototype")) : nullptr;
+		ResolveBaseClass(base_class_name, aStruct, base_class, base_prototype);
 	}
 
 	// Validate the name even if this is a nested definition, for consistency.
@@ -6247,6 +6256,7 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport)
 		// but it could be a class defined below this point, or a class defined in a module
 		// which hasn't been imported yet or has been imported but hasn't been resolved.
 		auto urc = new UnresolvedBaseClass;
+		urc->is_struct = aStruct;
 		urc->subclass = class_object;
 		urc->subclass_proto = prototype;
 		urc->name = _tcsdup(base_class_name);
@@ -6488,7 +6498,7 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 					TCHAR qu[2] { 0 };
 					if (TypeCode(type_name) != MdType::Void)
 						qu[0] = '\'';
-					_sntprintf(type_buf, _countof(type_buf), _T("this.Prototype.DefineProp('%s',{Type:%s%s%s,Pack:%i})")
+					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s%s%s,Pack:%i})")
 						, item, qu, type_name, qu, mClassStructPack[mClassObjectCount]);
 					if (!DefineClassVarInit(type_buf, true, class_object, ACT_EXPRESSION))
 						return FAIL;
@@ -6693,6 +6703,16 @@ Object *Script::FindClass(LPCTSTR aClassName, size_t aClassNameLength)
 	}
 
 	return base_object;
+}
+
+
+bool Script::ResolveBaseClass(LPCTSTR aClassName, bool aStruct, Object *&aClass, Object *&aProto)
+{
+	aClass = FindClass(aClassName);
+	aProto = aClass ? (Object*)aClass->GetOwnPropObj(_T("Prototype")) : nullptr;
+	return aProto
+		&& aStruct == (aProto->IsDerivedFrom(Object::sStructPrototype)
+					|| aProto == Object::sStructPrototype);
 }
 
 
@@ -12538,15 +12558,15 @@ ResultType Script::PreparseVarRefs()
 		if (!PreparseVarRefs(mCurrentModule->mFirstLine))
 			return FAIL;
 
+		mCurrLine = nullptr;
 		while (auto *unc = mCurrentModule->mUnresolvedBaseClass)
 		{
-			Object *proto, *cls = FindClass(unc->name);
-			if (!cls || !(proto = (Object*)cls->GetOwnPropObj(_T("Prototype"))))
+			Object *proto, *cls;
+			if (!ResolveBaseClass(unc->name, unc->is_struct, cls, proto))
 			{
-				mCurrLine = NULL;
 				mCurrFileIndex = unc->file_index;
 				mCombinedLineNumber = unc->line_number;
-				return ScriptError(_T("Unknown class."), unc->name);
+				return ScriptError(_T("Invalid base class."), unc->name);
 			}
 			unc->subclass->SetBase(cls);
 			unc->subclass_proto->SetBase(proto);

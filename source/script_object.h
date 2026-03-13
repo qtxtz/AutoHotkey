@@ -348,7 +348,8 @@ protected:
 		DataIsStructInfo = 0x10,
 		StructInfoLocked = 0x20,
 		NoCallDelete = 0x40,
-		LastObjectFlag = 0x40
+		CannotOwnProps = 0x80,
+		LastObjectFlag = 0x80
 	};
 
 	Object *CloneTo(Object &aTo);
@@ -406,6 +407,7 @@ public:
 
 	static Object *Create();
 	static Object *Create(ExprTokenType *aParam[], int aParamCount, ResultToken *apResultToken = nullptr);
+	static Object *CreateStruct();
 	static Object *CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken);
 	
 	static ResultType ApplyParams(ResultToken &aThisResultToken, int aFlags, ExprTokenType *aParam[], int aParamCount);
@@ -553,6 +555,8 @@ public:
 	bool IsOfType(Object *aPrototype) override;
 	bool IsDerivedFrom(IObject *aBase); // Always false for non-Object objects, but IObject* allows dynamic_cast to be avoided.
 
+	Object *ClassGetPrototype();
+
 	void EndClassDefinition();
 	void RemoveMissingProperties();
 	
@@ -563,6 +567,9 @@ public:
 	static ObjectMember sErrorMembers[], sOSErrorMembers[];
 	static Object *sPrototype, *sClass, *sClassPrototype;
 	static IObject *sObjectCall;
+	
+	static ObjectMember sStructMembers[];
+	static Object *sStructClass, *sStructPrototype;
 
 	static void CreateRootPrototypes();
 	static Object *CreateClass(Object *aPrototype, Object *aBase = Object::sClassPrototype);
@@ -603,6 +610,9 @@ public:
 	enum { M_Error__New, M_OSError__New };
 	void Error__New(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	void Error_Show(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
+
+	enum { M_Struct_Ptr, M_Struct_Size };
+	void StructGet(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 
 	// For pseudo-objects:
 	static Object *sAnyPrototype, *sPrimitivePrototype, *sStringPrototype

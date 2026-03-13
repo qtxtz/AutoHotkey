@@ -614,10 +614,9 @@ BIF_DECL(BIF_DllCall)
 			if (obj->IsOfType(Object::sPrototype))
 			{
 				return_class = (Object*)obj;
-				obj = return_class->GetOwnPropObj(_T("Prototype"));
-				if (obj && obj->IsOfType(Object::sPrototype))
+				return_proto = return_class->ClassGetPrototype();
+				if (return_proto && return_proto->IsDerivedFrom(Object::sStructPrototype))
 				{
-					return_proto = (Object*)obj;
 					if (return_struct_size = (int)return_proto->LockStructSize())
 						return_attrib.type = DLL_ARG_STRUCT;
 				}
@@ -647,10 +646,12 @@ has_valid_return_type:
 	{
 		aResultToken.symbol = SYM_STRING; // Set default for Invoke.
 		aResultToken.marker = _T("");
-		auto obj = Object::Create();
-		if (obj->New(aResultToken, aParam + aParamCount, 1) != OK)
+		NewStruct(aResultToken, aParam + aParamCount, 1);
+		if (aResultToken.Exited())
 			return; // New releases obj on failure.
-		return_struct_ptr = (void*)obj->DataPtr();
+		ASSERT(aResultToken.symbol == SYM_OBJECT);
+		auto obj = aResultToken.object;
+		return_struct_ptr = (void*)((Object*)obj)->DataPtr();
 		pObj[nObj++] = obj;
 		aResultToken.symbol = SYM_INTEGER; // Ensure it is not SYM_OBJECT, for maintainability (in case of early exit due to an error).
 	}
@@ -680,10 +681,9 @@ has_valid_return_type:
 			if (obj->IsOfType(Object::sPrototype))
 			{
 				param_class = (Object*)obj;
-				obj = param_class->GetOwnPropObj(_T("Prototype"));
-				if (obj && obj->IsOfType(Object::sPrototype))
+				param_proto = param_class->ClassGetPrototype();
+				if (param_proto && param_proto->IsDerivedFrom(Object::sStructPrototype))
 				{
-					param_proto = (Object*)obj;
 					if (this_dyna_param.struct_size = (int)param_proto->LockStructSize())
 						this_dyna_param.type = DLL_ARG_STRUCT;
 				}
@@ -790,9 +790,11 @@ has_valid_return_type:
 			{
 				aResultToken.symbol = SYM_STRING; // Set default for Invoke.
 				aResultToken.marker = _T("");
-				auto obj = Object::Create();
-				if (!obj->New(aResultToken, aParam + i, 1))
+				NewStruct(aResultToken, aParam + i, 1);
+				if (aResultToken.Exited())
 					return; // New releases obj on failure.
+				ASSERT(aResultToken.symbol == SYM_OBJECT);
+				auto obj = aResultToken.object;
 				pObj[nObj++] = this_param_obj = obj;
 				aResultToken.symbol = SYM_STRING; // Set default for Invoke (New set aResultToken to obj without calling AddRef).
 				aResultToken.marker = _T("");
