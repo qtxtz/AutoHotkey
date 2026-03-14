@@ -6292,6 +6292,9 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 		if (!DefineClassVarInit(base_class_name, true, class_object, ACT_EXPRESSION))
 			return FAIL;
 	}
+
+	if (aStruct)
+		Object::CreatePtrClass(mClassName, class_object);
 	
 	// This line enables a class without any static methods to be freed at program exit,
 	// or sooner if it's a nested class and the script removes it from the outer class.
