@@ -1491,9 +1491,10 @@ bool Script::IsFunctionDefinition(LPTSTR aBuf, LPTSTR aNextBuf)
 	LPTSTR action_start = aBuf;
 	LPTSTR action_end = find_identifier_end(aBuf);
 	bool is_default_export = false;
+	bool is_export = false;
 	if (IS_SPACE_OR_TAB(*action_end) && action_end - action_start == 6) // Allow modifier keywords.
 	{
-		bool is_export = !_tcsnicmp(aBuf, _T("Export"), 6);
+		is_export = !_tcsnicmp(aBuf, _T("Export"), 6);
 		if (is_export || !_tcsnicmp(aBuf, _T("Static"), 6))
 			action_start = omit_leading_whitespace(action_end);
 		if (is_default_export = is_export && !_tcsnicmp(action_start, _T("Default"), 7) && IS_SPACE_OR_TAB(action_start[7]))
@@ -1527,7 +1528,7 @@ bool Script::IsFunctionDefinition(LPTSTR aBuf, LPTSTR aNextBuf)
 	LPTSTR next_token = omit_leading_whitespace(param_end + 1);
 	return *next_token == 0 && *aNextBuf == '{' // Brace on next line.
 		|| *next_token == '{' && next_token[1] == 0 // Brace on same line.
-		|| *next_token == '=' && next_token[1] == '>'; // Fn() => expr
+		|| *next_token == '=' && next_token[1] == '>' && !is_export; // Fn() => expr
 }
 
 
