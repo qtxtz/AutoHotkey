@@ -468,12 +468,7 @@ void GetDllArgObjectPtr(ResultToken &aResultToken, IObject *obj, size_t &aPtr)
 		aPtr = (size_t)((BufferObject *)obj)->Data();
 		return;
 	}
-	auto result = GetObjectPtrProperty(obj, _T("Ptr"), aPtr, aResultToken, obj->IsOfType(Object::sPrototype));
-	if (result != INVOKE_NOT_HANDLED)
-		return;
-	Object *b = (Object *)obj;
-	if (b->GetDataPtr(aPtr) != OK)
-		aResultToken.UnknownMemberError(ExprTokenType(obj), IT_GET, _T("Ptr"));
+	GetObjectPtrProperty(obj, _T("Ptr"), aPtr, aResultToken);
 }
 
 
