@@ -1304,11 +1304,8 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 			hotkey_id_temp = hotkey_id_with_flags & HOTKEY_ID_MASK;
 			if (aKeyUp)
 			{
-				// Even though the key is being released, a hotkey should fire unconditionally because
-				// the only way we can reach this exact point for a non-key-up hotkey is when it fell
-				// through from Case #3, in which case this hotkey_id_with_flags is implicitly a key-up
-				// hotkey if there is no actual explicit key-up hotkey for it.  UPDATE: It is now possible
-				// to fall through from Case #2, so that is checked below.
+				// The hotkey found above should fire if it's a prefix key and wasn't fired on key-down.
+				// Otherwise, check for a key-up hotkey to fire instead.
 				if (hotkey_id_temp < Hotkey::sHotkeyCount && hotkey_up[hotkey_id_temp] != HOTKEY_ID_INVALID) // Relies on short-circuit boolean order.
 				{
 					if (  fell_through_from_case2
@@ -1321,7 +1318,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 					// and SuppressThisKeyFunc() or AllowIt() will post both hotkey-down and hotkey-up,
 					// allowing remappings and other hotkey down-up pairs to work.
 				}
-				else // Leave it at its former value unless case#2.  See comments above and below.
+				else
 					// Fix for v1.0.44.09: Since no key-up counterpart was found above (either in hotkey_up[]
 					// or via the HOTKEY_KEY_UP flag), don't fire this hotkey when it fell through from Case #2.
 					// This prevents a hotkey like $^b from firing TWICE (once on down and again on up) when a
