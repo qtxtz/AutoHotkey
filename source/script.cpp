@@ -1337,6 +1337,9 @@ void Script::TerminateApp(ExitReasons aExitReason, int aExitCode)
 	// destructed already).
 	DestroyWindows();
 
+	// Flush write buffers of any open File objects and other streams, such as Loop Read's OutputFile.
+	TextStream::FlushAllWriteBuffers();
+
 	// I know this isn't the preferred way to exit the program.  However, due to unusual
 	// conditions such as the script having MsgBoxes or other dialogs displayed on the screen
 	// at the time the user exits (in which case our main event loop would be "buried" underneath
