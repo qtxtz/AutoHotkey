@@ -1711,20 +1711,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 
 	if (aKeyUp)
 	{
-		if (this_key.as_modifiersLR)
-			// Since this hotkey is fired on a key-up event, and since it's a modifier, must
-			// not suppress the key because otherwise the system's state for this modifier
-			// key would be stuck down due to the fact that the previous down-event for this
-			// key (which is presumably a prefix *and* a suffix) was not suppressed. UPDATE:
-			// For v1.0.28, if the new field hotkey_down_was_suppressed is true, also suppress
-			// this up event, one purpose of which is to allow a pair of remappings such
-			// as the following to display the Start Menu (because otherwise the non-suppressed
-			// Alt key events would prevent it):
-			// *LAlt up::Send {LWin up}
-			// *LAlt::Send {LWin down}
-			return this_key.hotkey_down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
-
-		if (fire_with_no_suppress) // Plus we know it's not a modifier since otherwise it would've returned above.
+		if (fire_with_no_suppress || !this_key.hotkey_down_was_suppressed)
 		{
 			// Although it seems more sensible to suppress the key-up if the key-down was suppressed,
 			// it probably does no harm to let the key-up pass through, and in this case, it's exactly
@@ -1732,6 +1719,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 			// this_key.pForceToggle isn't checked because AllowIt() handles that.
 			return AllowKeyToGoToSystem;
 		} // No suppression.
+		// Otherwise, fall through to below to suppress it.
 	}
 	else // Key Down
 	{
