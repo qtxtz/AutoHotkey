@@ -995,7 +995,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 			if (this_key.was_just_used > 0  // AS_PREFIX or AS_PREFIX_FOR_HOTKEY.  v1.1.34.02: Excludes AS_PASSTHROUGH_PREFIX, which would indicate the prefix key's suffix hotkey should always fire.
 				&& hotkey_id_with_flags == HOTKEY_ID_INVALID) // v1.0.44.04: Must check this because this prefix might be being used in its role as a suffix instead.  At this point id is only set if modifiers are held down.
 			{
-				if (this_key.as_modifiersLR // Always false if our caller is the mouse hook.
+				if (!this_key.hotkey_down_was_suppressed
 					|| fire_with_no_suppress) // Can be true due to NO_SUPPRESS_NEXT_UP_EVENT.
 					return AllowKeyToGoToSystem; // Win/Alt will be disguised if needed.
 				// Otherwise:
