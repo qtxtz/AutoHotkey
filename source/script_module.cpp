@@ -192,7 +192,7 @@ Var *Script::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, 
 	if (var)
 	{
 		// mVars should contain only declared or exported variables at this point.
-		if (var->IsDeclared())
+		if (var->IsDeclared() || aAliasFor && aAliasFor->ResolveAlias() == var)
 		{
 			if (aAliasFor ? var->IsAlias() && var->GetAliasFor() == aAliasFor : var->ToObject() == aModule)
 				return var; // Already imported.
@@ -347,7 +347,6 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 					exported = new Var(mod_name, VAR_GLOBAL);
 					if (!exported || !imp.mod->mVars.Insert(exported, at))
 						return MemoryError();
-					//return ScriptError(_T("No such export"), mod_name);
 				}
 				if (!_tcsnicmp(cp, _T("as"), 2) && IS_SPACE_OR_TAB(cp[2]))
 				{
