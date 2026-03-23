@@ -6293,9 +6293,6 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 			return FAIL;
 	}
 
-	if (aStruct)
-		Object::CreatePtrClass(mClassName, class_object);
-	
 	// This line enables a class without any static methods to be freed at program exit,
 	// or sooner if it's a nested class and the script removes it from the outer class.
 	// Classes with static methods are never freed, since the method itself retains a

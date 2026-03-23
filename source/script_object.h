@@ -330,6 +330,7 @@ protected:
 		size_t nested_count;
 		size_t item_count; // Separate from nested_count for simplicity maintainability (since arrays of numbers have no nested objects).
 		Object *pointed_class;
+		Object *pointer_class;
 		Map *array_class_map;
 		MdType native_type;
 		UCHAR dllcall_type;
@@ -543,7 +544,8 @@ public:
 	bool DefineMethod(name_t aName, IObject *aFunc);
 	void DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass = false);
 	
-	static void CreatePtrClass(LPTSTR aClassName, Object *aClass, StructInfo *aNative = nullptr);
+	static void CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass, StructInfo *aNative = nullptr);
+	static Object *CreatePtrClass(Object *sc, Object *sp, StructInfo *spsi);
 	static void CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClass, size_t aCount);
 
 	bool CanSetBase(Object *aNewBase);
