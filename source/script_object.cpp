@@ -447,9 +447,10 @@ bool Object::Delete()
 		// safely if its DataPtr() points to deleted data.  So outer is always destructed first,
 		// and it becomes responsible for recursively destructing inner.
 		mRefCount--; // To reflect that this object doesn't have a counted ref to outer during outer's __delete.
-		bool deleted = mNested[0]->Release() == 0;
-		mRefCount++;
-		return deleted; // Caller will --mRefCount.
+		if (mNested[0]->Release() == 0)
+			return true; // this was deleted, so don't do mRefCount++.
+		mRefCount++; // Caller will --mRefCount.
+		return false;
 	}
 
 	// __Delete shouldn't be called for Prototype objects.  Although it would be more efficient to
