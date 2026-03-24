@@ -1951,7 +1951,7 @@ TypedProperty *Object::DefineTypedProperty(name_t aName)
 	return field->tprop;
 }
 
-FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack)
+FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack, size_t aOffset)
 {
 	size_t psize = 0, palign = 0;
 	StructInfo *psi = nullptr;
@@ -2006,9 +2006,12 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 	if (palign > si->align)
 		si->align = palign;
 	ASSERT(palign && ((palign & (palign - 1)) == 0)); // Must be a power of 2.
-	si->size = (si->size + palign - 1) & ~(palign - 1);
-	tprop->data_offset = si->size;
-	si->size += psize; // size may be unaligned until the struct definition is closed (if palign < si-align).
+	if (aOffset == -1)
+		aOffset = (si->size + palign - 1) & ~(palign - 1);
+	tprop->data_offset = aOffset;
+	aOffset += psize;
+	if (si->size < aOffset)
+		si->size = aOffset; // size may be unaligned until the struct definition is closed (if palign < si-align).
 	return OK;
 }
 
@@ -2133,13 +2136,29 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 		MdType ptype = pclass ? MdType::Void : TypeCode(TokenToString(value));
 		size_t pcount = (ptype == MdType::Void) ? (size_t)TokenToInt64(value) : 0;
 		size_t pack = desc->GetOwnProp(value, _T("Pack")) ? (size_t)TokenToInt64(value) : 0;
-		switch (DefineTypedProperty(name, ptype, pclass, pcount, pack))
+		size_t offset = -1;
+		if (desc->GetOwnProp(value, _T("Offset")))
+		{
+			if (value.symbol == SYM_STRING)
+			{
+				auto f = FindField(value.marker);
+				if (f && f->symbol == SYM_TYPED_FIELD)
+					offset = f->tprop->data_offset;
+			}
+			else if (value.symbol == SYM_INTEGER && value.value_int64 >= 0)
+			{
+				offset = (size_t)value.value_int64;
+			}
+			if (offset == -1)
+				_o_throw_value(aID ? ERR_PARAM3_INVALID : ERR_PARAM2_INVALID);
+		}
+		switch (DefineTypedProperty(name, ptype, pclass, pcount, pack, offset))
 		{
 		case OK:
 			AddRef();
 			_o_return(this);
 		case FR_E_ARGS:
-			_o_throw_param(1 + aID);
+			_o_throw_value(aID ? ERR_PARAM3_INVALID : ERR_PARAM2_INVALID);
 		case FR_E_OUTOFMEM:
 			_o_throw_oom;
 		default:
