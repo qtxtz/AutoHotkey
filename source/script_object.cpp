@@ -1643,7 +1643,11 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 	}
 	ExprTokenType key = (__int64)aCount;
 	if (map->GetItem(aResultToken, key))
+	{
+		ASSERT(aResultToken.symbol == SYM_OBJECT);
+		aResultToken.object->AddRef();
 		return;
+	}
 
 	TCHAR class_name[MAX_CLASS_NAME_LENGTH + 1];
 	sntprintf(class_name, _countof(class_name), _T("%s[%zi]"), sp->GetOwnPropString(_T("__Class")), aCount);
