@@ -534,11 +534,20 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 		return AllowKeyToGoToSystem;
 	}
 
-	if (!aKeyUp) // Set defaults for this down event.
-	{
-		// This should be done even for key-repeat, otherwise it can cause a key to become
-		// stuck down if the repeat isn't also suppressed:
-		this_key.hotkey_down_was_suppressed = false;
+	// Set this early since it needs to be reset prior to any of the returns below.
+	const UCHAR down_was_suppressed = this_key.down_was_suppressed & InputLevelMaskFromInfo(aExtraInfo);
+	// This should be done even for key-repeat, otherwise it can cause a key to become
+	// stuck down if the repeat isn't also suppressed.  It is done for key-up because:
+	//  1) If it isn't reset, attempts to send one or more key-up events without a
+	//     key-down might all be suppressed if the InputLevelMask matches.  It seems
+	//     better to suppress just the first one.
+	//  2) Some odd devices send key-down and key-up independently, in which case it
+	//     might be more useful to suppress only the first matching key-up.
+	//  3) That's how it was for many cases prior to v2.0.20 (NO_SUPPRESS_NEXT_UP_EVENT).
+	this_key.down_was_suppressed ^= down_was_suppressed;
+	
+	//if (!aKeyUp) // Set defaults for this down event.
+	//{
 		// Don't do the following because key-repeat should not prevent a previously-selected
 		// key-up hotkey from executing (although it can still be overridden by selecting a
 		// different key-up hotkey below).  If this was done, a key-down hotkey which puts a
@@ -546,7 +555,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 		// key is released prior to key-repeat, or the key-up hotkey explicitly allows it
 		// (which would defeat the purpose of hotkey_to_fire_upon_release).
 		//this_key.hotkey_to_fire_upon_release = HOTKEY_ID_INVALID;
-	}
+	//}
 
 	if (aHook == g_MouseHook)
 	{
@@ -862,7 +871,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 				(this_key.as_modifiersLR || !suppress_this_prefix || this_toggle_key_can_be_toggled))
 				return AllowKeyToGoToSystem;
 			// Mark this key as having been suppressed, so key-up will also be suppressed.
-			this_key.hotkey_down_was_suppressed = true;
+			this_key.down_was_suppressed |= InputLevelMaskFromInfo(aExtraInfo);
 			return SuppressThisKey;
 		}
 		//else valid suffix hotkey has been found; this will now fall through to Case #4 by virtue of aKeyUp==false.
@@ -904,7 +913,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 		// In light of the above, it seems best to keep this documented here as a known limitation for now.
 
 		if (!this_key.used_as_key_up)
-			return this_key.hotkey_down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
+			return down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
 		//else continue checking to see if the right modifiers are down to trigger one of this
 		// suffix key's key-up hotkeys.
 	}
@@ -937,7 +946,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 		}
 
 		if (this_toggle_key_can_be_toggled // Always false if our caller is the mouse hook.
-			&& !this_key.hotkey_down_was_suppressed)
+			&& !down_was_suppressed)
 		{
 			// It's done this way because CapsLock, for example, is a key users often
 			// press quickly while typing.  I suspect many users are like me in that
@@ -971,7 +980,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 			&& hotkey_id_with_flags == HOTKEY_ID_INVALID) // v1.0.44.04: Must check this because this prefix might be being used in its role as a suffix instead.  At this point id is only set if modifiers are held down.
 			// For simplicity and to ensure consistency with the used_as_suffix == true case,
 			// don't reevaluate the conditions which were already evaluated on key-down.
-			return this_key.hotkey_down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
+			return down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
 
 		// Since the above didn't return, this key is both a prefix and a suffix, and no
 		// other keys were pressed while this prefix was held down, so continue below to
@@ -1171,7 +1180,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 			}
 			pKeyHistoryCurr->event_type = 'h'; // h = hook hotkey (not one registered with RegisterHotkey)
 			if (!aKeyUp)
-				this_key.hotkey_down_was_suppressed = true;
+				this_key.down_was_suppressed |= InputLevelMaskFromInfo(aExtraInfo);
 			return SuppressThisKey;
 		} // end of alt-tab section.
 		// Since above didn't return, this isn't a prefix-triggered alt-tab action (though it might be
@@ -1288,7 +1297,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 			if (aKeyUp)
 				// This takes into account both prefix keys and key-up hotkeys: suppress if and only if
 				// key-down was suppressed.
-				return this_key.hotkey_down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
+				return down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
 
 			// For execution to have reached this point, the following must be true:
 			// 1) aKeyUp==false
@@ -1314,7 +1323,8 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 				, aExtraInfo // May affect the result due to #InputLevel.  Assume the key-up's SendLevel will be the same as the key-down.
 				, fire_with_no_suppress, NULL)) // fire_with_no_suppress is the value we really need to get back from it.
 				fire_with_no_suppress = true; // Although it's not "firing" in this case; just for use below.
-			this_key.hotkey_down_was_suppressed = !fire_with_no_suppress; // Fixed for v1.1.33.01: If this isn't set, the key-up won't be suppressed even after the key-down is.
+			if (!fire_with_no_suppress)
+				this_key.down_was_suppressed |= InputLevelMaskFromInfo(aExtraInfo);
 			return fire_with_no_suppress ? AllowKeyToGoToSystem : SuppressThisKey;
 		}
 		//else an eligible hotkey was found.
@@ -1341,7 +1351,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 		//     In that case, the documentation indicates the key-down will be suppressed.
 		//     Prior to v1.1.08, neither event was suppressed.
 		if (aKeyUp)
-			return this_key.hotkey_down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
+			return down_was_suppressed ? SuppressThisKey : AllowKeyToGoToSystem;
 		if (this_key.hotkey_to_fire_upon_release == HOTKEY_ID_INVALID)
 			return AllowKeyToGoToSystem;
 		// Otherwise, this is a key-down event with a corresponding key-up hotkey.
@@ -1354,7 +1364,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 		if (!firing_is_certain || fire_with_no_suppress)
 			return AllowKeyToGoToSystem;
 		// Both this down event and the corresponding up event should be suppressed.
-		this_key.hotkey_down_was_suppressed = true;
+		this_key.down_was_suppressed |= InputLevelMaskFromInfo(aExtraInfo);
 		return SuppressThisKey;
 	}
 	hotkey_id_temp = hotkey_id_with_flags & HOTKEY_ID_MASK; // Update in case CriterionFiringIsCertain() changed the naked/raw ID.
@@ -1651,7 +1661,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 
 	if (aKeyUp)
 	{
-		if (fire_with_no_suppress || !this_key.hotkey_down_was_suppressed)
+		if (fire_with_no_suppress || !down_was_suppressed)
 		{
 			// Although it seems more sensible to suppress the key-up if the key-down was suppressed,
 			// it probably does no harm to let the key-up pass through, and in this case, it's exactly
@@ -1724,7 +1734,7 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 	
 	// Otherwise:
 	if (!aKeyUp)
-		this_key.hotkey_down_was_suppressed = true;
+		this_key.down_was_suppressed |= InputLevelMaskFromInfo(aExtraInfo);
 	return SuppressThisKey;
 }
 
@@ -4252,7 +4262,7 @@ void ResetKeyTypeState(key_type &key)
 	key.it_put_alt_down = false;
 	key.it_put_shift_down = false;
 	key.down_performed_action = false;
-	key.hotkey_down_was_suppressed = false;
+	key.down_was_suppressed = 0;
 	key.was_just_used = 0;
 	key.hotkey_to_fire_upon_release = HOTKEY_ID_INVALID;
 	// ABOVE line was added in v1.0.48.03 to fix various ways in which the hook didn't receive the key-down
