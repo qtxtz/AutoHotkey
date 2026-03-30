@@ -1670,9 +1670,11 @@ HWND WindowSearch::IsMatch(bool aInvert)
 		// 2) The specified parent has no children.
 		// Since in both these cases GetLastError() returns ERROR_SUCCESS, we discard the return
 		// value and just check mFoundChild to determine whether a match has been found:
-		mFoundChild = NULL;  // Init prior to each call, in case mFindLastMatch is true.
+		// When mCriterionText is empty and mCriterionExcludeText is not, mFoundChild must
+		// be initialized to a non-null value to avoid excluding windows with no controls.
+		mFoundChild = !*mCriterionText ? mCandidateParent : NULL;  // Init prior to each call, in case mFindLastMatch is true.
 		EnumChildWindows(mCandidateParent, EnumChildFind, (LPARAM)this);
-		if (!mFoundChild) // This parent has no matching child, or no children at all.
+		if (!mFoundChild) // This parent has no matching child, or has an excluded child.
 			return NULL;
 	}
 
