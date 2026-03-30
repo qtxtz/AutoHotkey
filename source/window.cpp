@@ -607,7 +607,7 @@ BOOL CALLBACK EnumParentFind(HWND aWnd, LPARAM lParam)
 // through every window), it returns TRUE:
 {
 	WindowSearch &ws = *(WindowSearch *)lParam;  // For performance and convenience.
-	if (!ws.mSettings->DetectWindow(aWnd)) // Skip windows the script isn't supposed to detect.
+	if (!ws.mSettings.DetectWindow(aWnd)) // Skip windows the script isn't supposed to detect.
 		return TRUE;
 	ws.SetCandidate(aWnd);
 	// If this window doesn't match, continue searching for more windows (via TRUE).  Likewise, if
@@ -634,13 +634,13 @@ BOOL CALLBACK EnumChildFind(HWND aWnd, LPARAM lParam)
 	TCHAR win_text[WINDOW_TEXT_SIZE];
 	WindowSearch &ws = *(WindowSearch *)lParam;  // For performance and convenience.
 
-	if (!(ws.mSettings->DetectHiddenText || IsWindowVisible(aWnd))) // This text element should not be detectible by the script.
+	if (!(ws.mSettings.DetectHiddenText || IsWindowVisible(aWnd))) // This text element should not be detectible by the script.
 		return TRUE;  // Skip this child and keep enumerating to try to find a match among the other children.
 
 	// The below was formerly outsourced to the following function, but since it is only called from here,
 	// it has been moved inline:
 	// int GetWindowTextByTitleMatchMode(HWND aWnd, LPTSTR aBuf = NULL, int aBufSize = 0)
-	int text_length = ws.mSettings->TitleFindFast ? GetWindowText(aWnd, win_text, _countof(win_text))
+	int text_length = ws.mSettings.TitleFindFast ? GetWindowText(aWnd, win_text, _countof(win_text))
 		: GetWindowTextTimeout(aWnd, win_text, _countof(win_text));  // The slower method that is able to get text from more types of controls (e.g. large edit controls).
 	// Older idea that for the above that was not adopted:
 	// Only if GetWindowText() gets 0 length would we try the other method (and of course, don't bother
@@ -658,7 +658,7 @@ BOOL CALLBACK EnumChildFind(HWND aWnd, LPARAM lParam)
 	// EXCLUDE-TEXT: The following check takes precedence over the next, so it's done first:
 	if (*ws.mCriterionExcludeText) // For performance, avoid doing the checks below when blank.
 	{
-		if (ws.mSettings->TitleMatchMode == FIND_REGEX)
+		if (ws.mSettings.TitleMatchMode == FIND_REGEX)
 		{
 			if (RegExMatch(win_text, ws.mCriterionExcludeText))
 			{
@@ -686,7 +686,7 @@ BOOL CALLBACK EnumChildFind(HWND aWnd, LPARAM lParam)
 			// first matching control (which might simply be the first control if WinText is blank):
 			//return FALSE; // Match found, so stop searching.
 		}
-		else if (ws.mSettings->TitleMatchMode == FIND_REGEX)
+		else if (ws.mSettings.TitleMatchMode == FIND_REGEX)
 		{
 			if (RegExMatch(win_text, ws.mCriterionText)) // Match found.
 				ws.mFoundChild = aWnd;
@@ -1273,7 +1273,7 @@ bool IsWindowCloaked(HWND aWnd)
 
 
 
-bool ScriptThreadSettings::DetectWindow(HWND aWnd)
+bool WindowSearchSettings::DetectWindow(HWND aWnd)
 {
 	return DetectHiddenWindows || (IsWindowVisible(aWnd) && !IsWindowCloaked(aWnd));
 }
@@ -1402,7 +1402,7 @@ int GetWindowTextTimeout(HWND aWnd, LPTSTR aBuf, INT_PTR aBufSize, UINT aTimeout
 
 
 
-ResultType WindowSearch::SetCriteria(ScriptThreadSettings &aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR aExcludeTitle, LPCTSTR aExcludeText)
+ResultType WindowSearch::SetCriteria(WindowSearchSettings const& aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR aExcludeTitle, LPCTSTR aExcludeText)
 // Returns FAIL if the new criteria can't possibly match a window (due to ahk_id being in invalid
 // window or the specified ahk_group not existing).  Otherwise, it returns OK.
 // Callers must ensure that aText, aExcludeTitle, and aExcludeText point to buffers whose contents
@@ -1418,12 +1418,11 @@ ResultType WindowSearch::SetCriteria(ScriptThreadSettings &aSettings, LPCTSTR aT
 	// here, nor does there seem to be a risk that deref buffer's contents will get overwritten
 	// while this set of criteria is in effect because our callers never allow interrupting script-threads
 	// *during* the duration of any one set of criteria.
-	bool criterion_path_was_name_only = mCriterionPathIsNameOnly;
 	mCriterionExcludeTitle = aExcludeTitle;
 	mCriterionExcludeTitleLength = _tcslen(mCriterionExcludeTitle); // Pre-calculated for performance.
 	mCriterionText = aText;
 	mCriterionExcludeText = aExcludeText;
-	mSettings = &aSettings;
+	mSettings = aSettings;
 
 	DWORD this_criterion = CRITERION_TITLE, next_criterion;
 	LPCTSTR start, end, value, next_value = nullptr;
@@ -1448,6 +1447,8 @@ ResultType WindowSearch::SetCriteria(ScriptThreadSettings &aSettings, LPCTSTR aT
 				cp += 3, next_criterion = CRITERION_PATH;
 			else if (!_tcsnicmp(cp, _T("class"), 5))
 				cp += 5, next_criterion = CRITERION_CLASS;
+			else if (!_tcsnicmp(cp, _T("opt"), 3))
+				cp += 3, next_criterion = CRITERION_OPT;
 			else
 				continue;
 			next_value = cp;
@@ -1471,6 +1472,9 @@ ResultType WindowSearch::SetCriteria(ScriptThreadSettings &aSettings, LPCTSTR aT
 		case CRITERION_PID:
 			mCriterionPID = ATOU(start);
 			break;
+		case CRITERION_OPT:
+			ParseOption(start);
+			continue; // Don't add it to mCriteria.
 		default:
 			// In the following line, it may have been preferable to skip only zero or one spaces rather than
 			// calling omit_leading_whitespace().  But now this should probably be kept for backward compatibility.
@@ -1535,9 +1539,6 @@ ResultType WindowSearch::SetCriteria(ScriptThreadSettings &aSettings, LPCTSTR aT
 				break;
 			case CRITERION_PATH:
 				mCriterionPath = value;
-				// Allow something like "ahk_exe firefox.exe" to be an exact match for the process name
-				// instead of full path, but for flexibility, always use full path when in regex mode.
-				mCriterionPathIsNameOnly = mSettings->TitleMatchMode != FIND_REGEX && !_tcschr(mCriterionPath, '\\');
 				break;
 			case CRITERION_CLASS:
 				mCriterionClass = value;
@@ -1548,23 +1549,80 @@ ResultType WindowSearch::SetCriteria(ScriptThreadSettings &aSettings, LPCTSTR aT
 	}
 
 	// Any previously retrieved attributes of mCandidateParent remain valid, except:
-	if (criterion_path_was_name_only != mCriterionPathIsNameOnly)
-		mCandidateInfo &= ~CRITERION_PATH;
+	if (mCriteria & CRITERION_PATH)
+	{
+		// Allow something like "ahk_exe firefox.exe" to be an exact match for the process name
+		// instead of full path, but for flexibility, always use full path when in regex mode.
+		bool path_is_name_only = mSettings.TitleMatchMode != FIND_REGEX && !_tcschr(mCriterionPath, '\\');
+		if (path_is_name_only != mCriterionPathIsNameOnly)
+		{
+			mCriterionPathIsNameOnly = path_is_name_only;
+			mCandidateInfo &= ~CRITERION_PATH;
+		}
+	}
 
 	return OK;
 }
 
 
 
-void WindowSearch::SetCriteria(global_struct &aSettings, WinGroup &aGroup)
+void WindowSearch::SetCriteria(WindowSearchSettings const& aSettings, WinGroup &aGroup)
 {
 	mCriterionExcludeTitle = _T("");
 	mCriterionExcludeTitleLength = 0;
 	mCriterionText = _T("");
 	mCriterionExcludeText = _T("");
-	mSettings = &aSettings;
 	mCriterionGroup = &aGroup;
 	mCriteria = CRITERION_GROUP;
+	mSettings = aSettings;
+}
+
+
+
+void WindowSearch::ParseOption(LPCTSTR aValue)
+{
+	TCHAR option[12];
+	LPCTSTR end;
+	for (auto cp = aValue; *cp; cp = end)
+	{
+		cp = omit_leading_whitespace(cp);
+		for (end = cp; *end && !IS_SPACE_OR_TAB(*end); ++end);
+		if (end - cp >= _countof(option))
+			continue;
+		tmemcpy(option, cp, end - cp);
+		option[end - cp] = '\0';
+		if (*end)
+			++end;
+		if (!*option)
+			continue;
+		if (!_tcsnicmp(option, _T("ahk_"), 4))
+			break;
+
+		auto mode = Line::ConvertTitleMatchMode(option);
+		switch (mode)
+		{
+		default:
+			mSettings.TitleMatchMode = mode;
+			break;
+		case FIND_FAST:
+		case FIND_SLOW:
+			mSettings.TitleFindFast = mode == FIND_FAST;
+			break;
+		case MATCHMODE_INVALID:
+			if (!_tcsnicmp(option, _T("Hidden"), 6))
+			{
+				if (!_tcsnicmp(option + 6, _T("Text"), 4))
+				{
+					if (!option[10] || option[10] == '0' || option[10] == '1')
+						mSettings.DetectHiddenText = option[10] != '0';
+				}
+				else if (!option[6] || option[6] == '0' || option[6] == '1')
+					mSettings.DetectHiddenWindows = option[6] != '0';
+			}
+			break;
+		}
+	}
+	
 }
 
 
@@ -1617,7 +1675,7 @@ HWND WindowSearch::IsMatch(bool aInvert)
 
 	if (mCriteria & CRITERION_TITLE) // mCriterionTitle is always non-blank when CRITERION_TITLE is present.
 	{
-		switch(mSettings->TitleMatchMode)
+		switch(mSettings.TitleMatchMode)
 		{
 		case FIND_ANYWHERE:
 			if (!_tcsstr(mCandidateTitle, mCriterionTitle)) // Suitable even if mCriterionTitle is blank, though that's already ruled out above.
@@ -1646,7 +1704,7 @@ HWND WindowSearch::IsMatch(bool aInvert)
 				*mCandidateClass = '\0';
 			mCandidateInfo |= CRITERION_CLASS;
 		}
-		if (mSettings->TitleMatchMode == FIND_REGEX)
+		if (mSettings.TitleMatchMode == FIND_REGEX)
 		{
 			if (!RegExMatch(mCandidateClass, mCriterionClass))
 				return NULL;
@@ -1671,7 +1729,7 @@ HWND WindowSearch::IsMatch(bool aInvert)
 					*mCandidatePath = '\0';
 			mCandidateInfo |= CRITERION_PATH;
 		}
-		if (mSettings->TitleMatchMode == FIND_REGEX)
+		if (mSettings.TitleMatchMode == FIND_REGEX)
 		{
 			if (!RegExMatch(mCandidatePath, mCriterionPath))
 				return NULL;
@@ -1684,7 +1742,7 @@ HWND WindowSearch::IsMatch(bool aInvert)
 
 	// The following also handles the fact that mCriterionGroup might be NULL if the specified group
 	// does not exist or was never successfully created:
-	if ((mCriteria & CRITERION_GROUP) && (!mCriterionGroup || !mCriterionGroup->IsMember(mCandidateParent, *mSettings)))
+	if ((mCriteria & CRITERION_GROUP) && (!mCriterionGroup || !mCriterionGroup->IsMember(mCandidateParent, mSettings)))
 		return NULL; // Isn't a member of specified group.
 	//else it's a match so far, but continue onward in case there are other criteria (a little strange in this case, but might be useful).
 
@@ -1705,7 +1763,7 @@ HWND WindowSearch::IsMatch(bool aInvert)
 
 	if (*mCriterionExcludeTitle)
 	{
-		switch(mSettings->TitleMatchMode)
+		switch(mSettings.TitleMatchMode)
 		{
 		case FIND_ANYWHERE:
 			if (_tcsstr(mCandidateTitle, mCriterionExcludeTitle))

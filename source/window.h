@@ -78,6 +78,7 @@ inline bool IsTextMatch(LPCTSTR aHaystack, LPCTSTR aNeedle)
 #define CRITERION_CLASS 0x08
 #define CRITERION_GROUP 0x10
 #define CRITERION_PATH	0x20
+#define CRITERION_OPT  0x100
 
 class WindowSearch
 {
@@ -90,7 +91,7 @@ public:
 	DWORD mCriteria; // Which criteria are currently in effect (ID, PID, Class, Title, etc.)
 
 	// Controlled and initialized by SetCriteria():
-	ScriptThreadSettings *mSettings;           // Settings such as TitleMatchMode and DetectHiddenWindows.
+	WindowSearchSettings mSettings;           // Settings such as TitleMatchMode and DetectHiddenWindows.
 	LPTSTR mCriterionBuf;                     // Contains all of the other string criterion sourced from WinTitle.
 	size_t mCriterionBufSize;
 	LPCTSTR mCriterionTitle;                   // The portion of WinTitle preceding the first "ahk_" keyword.
@@ -138,8 +139,9 @@ public:
 		}
 	}
 
-	ResultType SetCriteria(ScriptThreadSettings &aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR aExcludeTitle, LPCTSTR aExcludeText);
-	void SetCriteria(global_struct &aSettings, WinGroup &aGroup);
+	ResultType SetCriteria(WindowSearchSettings const& aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR aExcludeTitle, LPCTSTR aExcludeText);
+	void SetCriteria(WindowSearchSettings const& aSettings, WinGroup &aGroup);
+	void ParseOption(LPCTSTR aValue);
 	HWND IsMatch(bool aInvert = false);
 
 	WindowSearch() // Constructor.

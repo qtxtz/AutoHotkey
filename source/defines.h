@@ -918,12 +918,20 @@ struct ScriptThreadState
 	bool AllowThreadToBeInterrupted; // Whether this thread can be interrupted by custom menu items, hotkeys, or timers.  Separate from g_AllowInterruption because that's for use by ongoing operations, such as SendKeys, and should override the thread's setting.
 };
 
-struct ScriptThreadSettings
+struct WindowSearchSettings
+{
+	TitleMatchModes TitleMatchMode;
+	bool TitleFindFast; // Whether to use the fast mode of searching window text, or the more thorough slow mode.
+	bool DetectHiddenWindows; // Whether to detect the titles of hidden parent windows.
+	bool DetectHiddenText;    // Whether to detect the text of hidden child windows.
+	bool DetectWindow(HWND aWnd);
+};
+
+struct ScriptThreadSettings : WindowSearchSettings
 {
 	HotkeyCriterion *HotCriterion;
 
 	DWORD PeekFrequency; // DWORD vs. UCHAR might improve performance a little since it's checked so often.
-	TitleMatchModes TitleMatchMode;
 	int WinDelay;  // negative values may be used as special flags.
 	int ControlDelay; // negative values may be used as special flags.
 	int KeyDelay;     //
@@ -939,9 +947,6 @@ struct ScriptThreadSettings
 	CoordModeType CoordMode; // Bitwise collection of flags.
 
 	// All these one-byte members are kept adjacent to make the struct smaller, which helps conserve stack space:
-	bool TitleFindFast; // Whether to use the fast mode of searching window text, or the more thorough slow mode.
-	bool DetectHiddenWindows; // Whether to detect the titles of hidden parent windows.
-	bool DetectHiddenText;    // Whether to detect the text of hidden child windows.
 	bool AllowTimers; // v1.0.40.01 Whether new timer threads are allowed to start during this thread.
 	bool ThreadIsCritical; // Whether this thread has been marked (un)interruptible by the "Critical" command.
 	UCHAR DefaultMouseSpeed;
@@ -950,7 +955,6 @@ struct ScriptThreadSettings
 	bool ListLinesIsEnabled;
 
 	//inline bool InTryBlock() { return ExcptMode & EXCPTMODE_TRY; } // Currently unused.
-	bool DetectWindow(HWND aWnd);
 };
 
 // global_struct is a combination of thread state (things specific to a thread that
