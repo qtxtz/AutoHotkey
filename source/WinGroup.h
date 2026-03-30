@@ -49,6 +49,7 @@ public:
 
 
 enum BuiltInFunctionID;
+class WindowSearch;
 class WinGroup
 {
 private:
@@ -88,6 +89,7 @@ public:
 	void Deactivate(bool aStartWithMostRecent);
 	bool IsEmpty() {return mFirstWindow == NULL;}
 	WindowSpec *IsMember(HWND aWnd, WindowSearchSettings const& aSettings);
+	WindowSpec *IsMember(HWND aWnd, WindowSearchSettings const& aSettings, WindowSearch &ws, bool aInvert = false);
 	WinGroup(LPTSTR aGroupName)
 		// The caller must ensure that aGroupName is non-null and non-empty-string.
 		: mName(aGroupName) // Caller gave us a pointer to dynamic memory for this.

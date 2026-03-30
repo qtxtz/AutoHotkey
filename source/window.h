@@ -114,7 +114,7 @@ public:
 
 	HWND *mAlreadyVisited;      // Array of HWNDs to exclude from consideration.
 	int mAlreadyVisitedCount;   // Count of items in the above.
-	WindowSpec *mFirstWinSpec;  // Linked list used by the WinGroup commands.
+	WinGroup *mSearchGroup;
 	BuiltInFunctionID mActionType; // Used only by WinGroup::PerformShowWindow().
 	int mTimeToWaitForClose;    // Same.
 	Array *mArray;             // Used by WinGetList() to fetch an array of matching HWNDs.
@@ -157,7 +157,7 @@ public:
 		// them in those relatively rare cases when they need to be.  WinGroup::ActUponAll() and
 		// WinGroup::Deactivate() (and probably other callers) rely on these attributes being retained
 		// after they were overridden even upon multiple subsequent calls to SetCriteria():
-		, mFindLastMatch(false), mAlreadyVisited(NULL), mAlreadyVisitedCount(0), mFirstWinSpec(NULL), mArray(NULL)
+		, mFindLastMatch(false), mAlreadyVisited(NULL), mAlreadyVisitedCount(0), mSearchGroup(NULL), mArray(NULL)
 	{
 	}
 
