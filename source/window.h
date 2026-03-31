@@ -79,6 +79,8 @@ inline bool IsTextMatch(LPCTSTR aHaystack, LPCTSTR aNeedle)
 #define CRITERION_GROUP 0x10
 #define CRITERION_PATH	0x20
 #define CRITERION_OPT  0x100
+#define CANDIDATE_DETECTED 0x200
+#define CANDIDATE_VISIBILITY 0x400
 
 class WindowSearch
 {
@@ -124,6 +126,7 @@ public:
 	DWORD mCandidateInfo; // Criteria flags indicating which attributes have been retrieved.
 	// Candidate attributes retrieved as needed:
 	DWORD mCandidatePID;
+	bool mCandidateVisible;
 	TCHAR mCandidateTitle[WINDOW_TEXT_SIZE];  // For storing title or class name of the given mCandidateParent.
 	TCHAR mCandidateClass[WINDOW_CLASS_SIZE]; // Must not share mem with mCandidateTitle because even if ahk_class is in effect, ExcludeTitle can also be in effect.
 	TCHAR mCandidatePath[MAX_PATH]; // MAX_PATH vs. T_MAX_PATH because it currently seems to be impossible to run an executable with a longer path (in Windows 10.0.16299).

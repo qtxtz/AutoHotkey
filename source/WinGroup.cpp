@@ -92,6 +92,9 @@ void WinGroup::ActUponAll(BuiltInFunctionID aActionType, int aTimeToWaitForClose
 	ws.mSearchGroup = this;
 	ws.mActionType = aActionType;    // Set the type of action to be performed on each window.
 	ws.mTimeToWaitForClose = aTimeToWaitForClose;  // Only relevant for WinClose and WinKill.
+	ws.mSettings = *g;
+	if (aActionType == FID_WinShow)
+		ws.mSettings.DetectHiddenWindows = true;
 	EnumWindows(EnumParentActUponAll, (LPARAM)&ws);
 	if (ws.mFoundParent) // It acted upon least one window.
 		DoWinDelay;
@@ -415,19 +418,12 @@ BOOL CALLBACK EnumParentActUponAll(HWND aWnd, LPARAM lParam)
 {
 	WindowSearch &ws = *(WindowSearch *)lParam;  // For performance and convenience.
 
-	// Skip windows the command isn't supposed to detect.  ACT_WINSHOW is exempt because
-	// hidden windows are always detected by the WinShow command:
-	if (!(ws.mActionType == FID_WinShow || g->DetectWindow(aWnd)))
-		return TRUE;
-
-	int nCmdShow;
-	ws.SetCandidate(aWnd);
-
-	if (ws.mSearchGroup->IsMember(aWnd, *g, ws))
+	// Don't pass ws itself, since we want to preserve the original default settings.
+	if (ws.mSearchGroup->IsMember(aWnd, ws.mSettings))
 	{
 		// IsMatch() has set the value of ws.mFoundParent to tell our caller that at least one window was acted upon.
 		// See BIF_WinShow for comments about the following section.
-		nCmdShow = SW_NONE; // Set default each time.
+		int nCmdShow = SW_NONE; // Set default each time.
 		switch (ws.mActionType)
 		{
 		case FID_WinClose:

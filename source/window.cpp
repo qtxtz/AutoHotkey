@@ -455,15 +455,10 @@ HWND WinActive(global_struct &aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR 
 	if (!(*aTitle || *aText || *aExcludeTitle || *aExcludeText)) // Use the "last found" window.
 		return (fore_win == GetValidLastUsedWindow(aSettings)) ? fore_win : NULL;
 
-	// Only after the above check should the below be done.  This is because "IfWinActive" (with no params)
-	// should be "true" if one of the script's GUI windows is active:
-	if (!aSettings.DetectWindow(fore_win)) // In this case, the caller's window can't be active.
-		return NULL;
-
 	WindowSearch ws;
 	ws.SetCandidate(fore_win);
 
-	if (ws.SetCriteria(aSettings, aTitle, aText, aExcludeTitle, aExcludeText) && ws.IsMatch()) // aSettings.DetectHiddenWindows was already checked above.
+	if (ws.SetCriteria(aSettings, aTitle, aText, aExcludeTitle, aExcludeText) && ws.IsMatch())
 		UPDATE_AND_RETURN_LAST_USED_WINDOW(fore_win) // This also does a "return".
 	else // If the line above didn't return, indicate that the specified window is not active.
 		return NULL;
@@ -510,11 +505,9 @@ HWND WinExist(global_struct &aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR a
 		// should be no danger of any reasonable script ever passing that value in as a real target window,
 		// which should thus minimize the chance of a crash due to calling various API functions
 		// with invalid window handles.
-		if (   ws.mCriterionHwnd != HWND_BROADCAST // It's not exempt from the other checks on the two lines below.
-			&& (!IsWindow(ws.mCriterionHwnd)    // And it's either not a valid window...
-				// ...or the window is not detectible (in v1.0.40.05, child windows are detectible even if hidden):
-				|| !(aSettings.DetectWindow(ws.mCriterionHwnd)
-					|| (GetWindowLong(ws.mCriterionHwnd, GWL_STYLE) & WS_CHILD)))   )
+		if (ws.mCriterionHwnd == HWND_BROADCAST)
+			ws.mSettings.DetectHiddenWindows = true; // It's exempt from DetectHiddenWindows and IsWindow() checks.
+		else if (!IsWindow(ws.mCriterionHwnd)) // It's not a valid window.
 			return NULL;
 
 		// Otherwise, the window is valid and detectible.
@@ -525,7 +518,7 @@ HWND WinExist(global_struct &aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR a
 	}
 	else // aWinTitle doesn't contain "ahk_id".  Try to find a matching window.
 	{
-		if ((ws.mCriteria & CRITERION_CLASS) && aSettings.TitleMatchMode != FIND_REGEX && !aFindLastMatch)
+		if ((ws.mCriteria & CRITERION_CLASS) && ws.mSettings.TitleMatchMode != FIND_REGEX && !aFindLastMatch)
 		{
 			// This should be a reliable way to find the first window with the given class name.
 			// Benchmarks showed FindWindow to be perhaps 20 times faster than using EnumWindows
@@ -539,15 +532,12 @@ HWND WinExist(global_struct &aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR a
 			// omitted in FIND_IN_LEADING_PART or FIND_ANYWHERE modes, otherwise it would exclude valid
 			// candidate windows.  For FIND_EXACT mode, specifying the title makes it more likely that
 			// the found window will be a match, but we still need to do a case-sensitive comparison.
-			LPCTSTR title = ((ws.mCriteria & CRITERION_TITLE) && aSettings.TitleMatchMode == FIND_EXACT) ? ws.mCriterionTitle : nullptr;
+			LPCTSTR title = ((ws.mCriteria & CRITERION_TITLE) && ws.mSettings.TitleMatchMode == FIND_EXACT) ? ws.mCriterionTitle : nullptr;
 			HWND hwnd = FindWindow(ws.mCriterionClass, title);
 			if (!hwnd)
 				return NULL; // There are definitely no matching windows, so skip EnumWindows.
-			if (aSettings.DetectWindow(hwnd))
-			{
-				ws.SetCandidate(hwnd);
-				ws.IsMatch();
-			}
+			ws.SetCandidate(hwnd);
+			ws.IsMatch(); // This sets ws.mFoundParent only if it is a match.
 			// The following could be used to get the atom which corresponds to mCriterionClass,
 			// allowing EnumParentFind to compare atoms and avoid retrieving titles or class names
 			// in many cases.  It isn't done because:
@@ -607,8 +597,6 @@ BOOL CALLBACK EnumParentFind(HWND aWnd, LPARAM lParam)
 // through every window), it returns TRUE:
 {
 	WindowSearch &ws = *(WindowSearch *)lParam;  // For performance and convenience.
-	if (!ws.mSettings.DetectWindow(aWnd)) // Skip windows the script isn't supposed to detect.
-		return TRUE;
 	ws.SetCandidate(aWnd);
 	// If this window doesn't match, continue searching for more windows (via TRUE).  Likewise, if
 	// mFindLastMatch is true, continue searching even if this window is a match.  Otherwise, this
@@ -1649,6 +1637,21 @@ HWND WindowSearch::IsMatch(bool aInvert)
 	// Keep in mind that most windows don't match even the first criterion, so the other criteria can
 	// be skipped many times when enumerating through windows.  The effect can be significant even if
 	// the window exists and is toward the top of the Z-order.
+
+	if (!mSettings.DetectHiddenWindows && !(mCriteria & CRITERION_GROUP))
+	{
+		if (!(mCandidateInfo & CANDIDATE_VISIBILITY))
+		{
+			DWORD style = GetWindowLong(mCandidateParent, GWL_STYLE);
+			// Controls specified by ahk_id are always detected (there shouldn't be any other way for
+			// mCriterionHwnd to be a control HWND).
+			if ((style & WS_CHILD) ? true : (style & WS_VISIBLE) && !IsWindowCloaked(mCriterionHwnd))
+				mCandidateInfo |= CANDIDATE_DETECTED;
+			mCandidateInfo |= CANDIDATE_VISIBILITY;
+		}
+		if (!(mCandidateInfo & CANDIDATE_DETECTED))
+			return NULL;
+	}
 	
 	if (mCriteria & CRITERION_PID)
 	{
