@@ -1461,7 +1461,8 @@ ResultType WindowSearch::SetCriteria(WindowSearchSettings const& aSettings, LPCT
 			mCriterionPID = ATOU(start);
 			break;
 		case CRITERION_OPT:
-			ParseOption(start);
+			if (!ParseOption(start, end))
+				return FAIL; // Inform caller of invalid criteria.
 			continue; // Don't add it to mCriteria.
 		default:
 			// In the following line, it may have been preferable to skip only zero or one spaces rather than
@@ -1567,24 +1568,24 @@ void WindowSearch::SetCriteria(WindowSearchSettings const& aSettings, WinGroup &
 
 
 
-void WindowSearch::ParseOption(LPCTSTR aValue)
+ResultType WindowSearch::ParseOption(LPCTSTR aValue, LPCTSTR aEnd)
 {
 	TCHAR option[12];
 	LPCTSTR end;
-	for (auto cp = aValue; *cp; cp = end)
+	for (auto cp = aValue;; cp = end)
 	{
 		cp = omit_leading_whitespace(cp);
+		if (aEnd ? cp >= aEnd : !*cp)
+			break;
 		for (end = cp; *end && !IS_SPACE_OR_TAB(*end); ++end);
 		if (end - cp >= _countof(option))
-			continue;
+			return FAIL;
 		tmemcpy(option, cp, end - cp);
 		option[end - cp] = '\0';
 		if (*end)
 			++end;
 		if (!*option)
 			continue;
-		if (!_tcsnicmp(option, _T("ahk_"), 4))
-			break;
 
 		auto mode = Line::ConvertTitleMatchMode(option);
 		switch (mode)
@@ -1607,10 +1608,12 @@ void WindowSearch::ParseOption(LPCTSTR aValue)
 				else if (!option[6] || option[6] == '0' || option[6] == '1')
 					mSettings.DetectHiddenWindows = option[6] != '0';
 			}
+			else
+				return FAIL;
 			break;
 		}
 	}
-	
+	return OK;
 }
 
 

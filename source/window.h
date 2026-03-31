@@ -144,7 +144,7 @@ public:
 
 	ResultType SetCriteria(WindowSearchSettings const& aSettings, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR aExcludeTitle, LPCTSTR aExcludeText);
 	void SetCriteria(WindowSearchSettings const& aSettings, WinGroup &aGroup);
-	void ParseOption(LPCTSTR aValue);
+	ResultType ParseOption(LPCTSTR aValue, LPCTSTR aEnd);
 	HWND IsMatch(bool aInvert = false);
 
 	WindowSearch() // Constructor.
