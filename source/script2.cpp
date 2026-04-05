@@ -224,6 +224,12 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lPar
 				// ID assigned to this timer.
 				SetTimer(top_box, g_nMessageBoxes, timeout, MsgBoxTimeout);
 			}
+			// If there's a timer check pending, skip it for this interval to avoid interrupting the
+			// dialog loop before it shows the dialog window.  Otherwise, the MsgBox might disappear
+			// immediately since we've already started the timeout.
+			MSG msg;
+			if (PeekMessage(&msg, g_hWnd, WM_TIMER, WM_TIMER, PM_NOREMOVE) && msg.wParam == TIMER_ID_MAIN && !msg.lParam)
+				PeekMessage(&msg, g_hWnd, WM_TIMER, WM_TIMER, PM_REMOVE);
 		}
 		// else: if !top_box: no error reporting currently.
 		return 0;
