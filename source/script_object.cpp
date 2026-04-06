@@ -1655,14 +1655,14 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 	auto sp = sc ? sc->ClassGetPrototype() : nullptr;
 	auto spsi = sp ? sp->GetStructInfo() : nullptr;
 	Map *map = spsi ? spsi->array_class_map : nullptr;
+	ExprTokenType key = (__int64)aCount;
 	if (!map)
 	{
 		if (!spsi || !sp->IsDerivedFrom(Object::sStructPrototype))
 			return (void)aResultToken.TypeError(_T("Struct class"), aOfClass);
 		spsi->array_class_map = map = Map::Create();
 	}
-	ExprTokenType key = (__int64)aCount;
-	if (map->GetItem(aResultToken, key))
+	else if (map->GetItem(aResultToken, key))
 	{
 		ASSERT(aResultToken.symbol == SYM_OBJECT);
 		auto ac = (Object*)aResultToken.object;
