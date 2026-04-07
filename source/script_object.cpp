@@ -63,6 +63,29 @@ ResultType CallMethod(IObject *aInvokee, IObject *aThis, LPTSTR aMethodName
 // Object::Create - Create a new Object given an array of property name/value pairs.
 //
 
+void *Object::operator new(size_t aObjectSize)
+{
+	return operator new(aObjectSize, 0);
+}
+
+void *Object::operator new(size_t aObjectSize, size_t aAdditional)
+{
+	if (auto p = malloc(aObjectSize + aAdditional))
+		return p;
+	g_script.CriticalError(ERR_OUTOFMEM);
+	return nullptr; // Never executed (process terminated).
+}
+
+void Object::operator delete(void *p)
+{
+	free(p);
+}
+
+void Object::operator delete(void *p, size_t)
+{
+	free(p);
+}
+
 Object *Object::Create()
 {
 	Object *obj = new Object();
@@ -568,21 +591,19 @@ Object::~Object()
 	if (mBase)
 		mBase->Release();
 	if (mFlags & DataIsAllocatedFlag)
-	{
-		if (mFlags & DataIsStructInfo)
-		{
-			auto &si = *(StructInfo*)mData;
-			// The pointer class holds a counted reference to the pointed class only while
-			// external references to the pointer class exist.  At this stage all external
-			// references to both have been released and pointed_class has been deleted.
-			if (si.pointer_class)
-				si.pointer_class->Delete();
-			//if (si.pointed_class)
-			//	si.pointed_class->Release();
-			if (si.array_class_map)
-				si.array_class_map->Release();
-		}
 		free(mData);
+	if (mFlags & StructInfoInitialized)
+	{
+		auto &si = *(StructInfo*)(this + 1);
+		// The pointer class holds a counted reference to the pointed class only while
+		// external references to the pointer class exist.  At this stage all external
+		// references to both have been released and pointed_class has been deleted.
+		if (si.pointer_class)
+			si.pointer_class->Delete();
+		//if (si.pointed_class)
+		//	si.pointed_class->Release();
+		if (si.array_class_map)
+			si.array_class_map->Release();
 	}
 }
 
@@ -887,7 +908,7 @@ Object *Object::GetThisForTypedValue(ResultToken &aResultToken, int aFlags, name
 	auto realthis = this;
 	if (aFlags & (IF_SUBSTITUTE_THIS | IF_SUPER))
 		realthis = dynamic_cast<Object*>(TokenToObject(aThisToken));
-	if (realthis && realthis->mData && !(realthis->mFlags & DataIsStructInfo))
+	if (realthis && realthis->mData)
 		return realthis;
 	aResultToken.Error(_T("Property invalid for object with null data."), aName);
 	return nullptr;
@@ -1447,7 +1468,7 @@ Object *Object::CreateClass(Object *aPrototype, Object *aBase)
 
 Object *Object::CreatePrototype(LPTSTR aClassName, Object *aBase)
 {
-	auto obj = new Object();
+	auto obj = new (sizeof(StructInfo)) Object();
 	obj->mFlags |= ClassPrototype;
 	obj->SetOwnProp(_T("__Class"), ExprTokenType(aClassName), false);
 	obj->SetBase(aBase);
@@ -1571,7 +1592,7 @@ void Object::CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass, 
 	auto sc_ = TokenToObject(aToClass);
 	auto sc = sc_->IsOfType(Object::sPrototype) ? (Object*)sc_ : nullptr;
 	auto sp = sc ? sc->ClassGetPrototype() : nullptr;
-	auto spsi = sp ? sp->GetStructInfo(true) : nullptr;
+	auto spsi = sp ? sp->GetStructInfoDefine() : nullptr;
 	if (spsi && spsi->pointer_class)
 	{
 		// Return the previously created class.
@@ -1619,7 +1640,7 @@ Object *Object::CreatePtrClass(Object *sc, Object *sp, StructInfo *spsi)
 	ptr_cls->mNested = new Object * [1]; // Can't use &si->pointed_class because delete will be called.
 	ptr_cls->mNested[0] = sc;
 	spsi->pointer_class = ptr_cls;
-	auto si = ptr_pro->GetStructInfo(true);
+	auto si = ptr_pro->GetStructInfoDefine();
 	ptr_pro->mFlags |= StructInfoLocked;
 	si->align = si->size = sizeof(void*);
 	si->nested_count = 1;
@@ -1678,7 +1699,7 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 	// No cached class, so create one.
 	auto ap = CreatePrototype(class_name, Object::sCArrayPrototype);
 	auto ac = CreateClass(ap, Object::sCArrayClass);
-	auto si = ap->GetStructInfo(true);
+	auto si = ap->GetStructInfoDefine();
 	ap->mFlags |= StructInfoLocked;
 	ap->Release();
 
@@ -2021,7 +2042,7 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 		palign = psize = TypeSize(aType);
 	if (!psize)
 		return FR_E_ARGS;
-	auto si = GetStructInfo(true);
+	auto si = GetStructInfoDefine();
 	if (!si || (mFlags & StructInfoLocked))
 		return FR_E_FAILED;
 	auto tprop = DefineTypedProperty(aName);
@@ -2051,32 +2072,30 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 	return OK;
 }
 
-Object::StructInfo *Object::GetStructInfo(bool aDefine)
+Object::StructInfo *Object::GetStructInfo()
 {
-	if (!aDefine)
+	if (!(mFlags & StructInfoInitialized))
+		return mBase ? mBase->GetStructInfo() : nullptr;
+
+	if (!(mFlags & StructInfoLocked))
 	{
-		if (!(mFlags & StructInfoLocked))
-		{
-			mFlags |= StructInfoLocked; // Permit no further changes now that there is a dependent struct instance or definition.
-			if (mFlags & DataIsStructInfo)
-			{
-				// Apply the struct's final alignment requirement to its size.
-				auto si = (StructInfo*)mData;
-				si->size = (si->size + si->align - 1) & ~(si->align - 1);
-			}
-		}
+		mFlags |= StructInfoLocked; // Permit no further changes now that there is a dependent struct instance or definition.
+		// Apply the struct's final alignment requirement to its size.
+		auto &si = *(StructInfo*)(this + 1);
+		si.size = (si.size + si.align - 1) & ~(si.align - 1);
 	}
-	if (!(mFlags & DataIsStructInfo))
+	return (StructInfo*)(this + 1);
+}
+
+Object::StructInfo *Object::GetStructInfoDefine()
+{
+	if (!(mFlags & ClassPrototype))
+		return nullptr;
+
+	if (!(mFlags & StructInfoInitialized))
 	{
-		auto pbsi = mBase ? mBase->GetStructInfo(false) : nullptr;
-		if (!aDefine)
-			return pbsi;
-		if (mFlags & DataIsSetFlag)
-			return nullptr;
-		auto psi = (StructInfo*)malloc(sizeof(StructInfo));
-		if (!psi)
-			return nullptr;
-		auto &si = *psi;
+		auto pbsi = mBase ? mBase->GetStructInfo() : nullptr;
+		auto &si = *(StructInfo*)(this + 1);
 		if (pbsi)
 		{
 			auto &bsi = *pbsi;
@@ -2103,10 +2122,24 @@ Object::StructInfo *Object::GetStructInfo(bool aDefine)
 			si.pointed_class = nullptr;
 			si.array_class_map = nullptr;
 		}
-		mData = &si;
-		mFlags |= DataIsStructInfo | DataIsAllocatedFlag;
+		mFlags |= StructInfoInitialized;
 	}
-	return (StructInfo*)mData;
+	return (StructInfo*)(this + 1);
+}
+
+UINT_PTR Object::StructSize()
+{
+	if (!(mFlags & StructInfoInitialized))
+		return mBase ? mBase->StructSize() : 0;
+	return ((StructInfo*)(this + 1))->size;
+}
+
+MdType Object::GetStructMdType()
+{
+	if (!(mFlags & StructInfoInitialized))
+		return MdType::Void;
+	auto &si = *(StructInfo*)(this + 1);
+	return si.item_count == 0 ? si.native_type : MdType::Void;
 }
 
 ResultType FillPropertyFlags(IObject *aObj, bool aSetter, Property &aProp, ResultToken &aResultToken)
@@ -2400,7 +2433,7 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 	// First pass: gather class objects into definition order.
 	for (auto base = mBase; base; base = base->mBase)
 	{
-		if (!(base->mFlags & DataIsStructInfo))
+		if (!(base->mFlags & StructInfoInitialized))
 			continue;
 		for (index_t i = 0; i < base->mFields.Length(); ++i)
 		{
@@ -4301,11 +4334,11 @@ void Object::CreateRootPrototypes()
 		tp.pointed_proto = nullptr;
 		tp.item_count = 0;
 		tp.data_offset = 0;
-		auto &psi = *sPtrPrototype->GetStructInfo(true);
+		auto &psi = *sPtrPrototype->GetStructInfoDefine();
 		psi.align = psi.size = sizeof(void*);
 		psi.pointed_class = sStructClass; // This is not a counted reference.
 		sPtrPrototype->mFlags |= StructInfoLocked;
-		auto &ssi = *sStructPrototype->GetStructInfo(true);
+		auto &ssi = *sStructPrototype->GetStructInfoDefine();
 		ssi.pointer_class = sPtrClass;
 		sPtrClass->mFlags |= StructInfoLocked;
 	}
@@ -4322,7 +4355,7 @@ void Object::CreateRootPrototypes()
 	for (int i = 0; i < _countof(type_names); ++i)
 	{
 		auto p = CreatePrototype(type_names[i], sStructPrototype);
-		auto si = p->GetStructInfo(true);
+		auto si = p->GetStructInfoDefine();
 		p->mFlags |= StructInfoLocked;
 		si->native_type = type_codes[i];
 		si->dllcall_type = type_dllcall[i];

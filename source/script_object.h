@@ -355,7 +355,7 @@ protected:
 		NativeClassPrototype = 0x02,
 		DataIsSetFlag = 0x04,
 		DataIsAllocatedFlag = 0x08,
-		DataIsStructInfo = 0x10,
+		StructInfoInitialized = 0x10,
 		StructInfoLocked = 0x20,
 		NoCallDelete = 0x40,
 		CannotOwnProps = 0x80,
@@ -389,7 +389,8 @@ private:
 		return SetInternalCapacity(mFields.Capacity() ? mFields.Capacity() * 2 : 4);
 	}
 	
-	StructInfo *GetStructInfo(bool aDefine = false);
+	StructInfo *GetStructInfoDefine();
+	StructInfo *GetStructInfo();
 
 protected:
 	ResultType GetProperty(ResultToken &aResultToken, int aFlags, name_t aName, ExprTokenType &aThisToken, ExprTokenType *aParam[], int aParamCount);
@@ -417,6 +418,11 @@ protected:
 	ResultType CArrayNew(ResultToken &aResultToken, StructInfo *si);
 
 public:
+
+	void *operator new(size_t aObjectSize);
+	void *operator new(size_t aObjectSize, size_t aAdditional);
+	void operator delete(void *p);
+	void operator delete(void *p, size_t);
 
 	static Object *Create();
 	static Object *Create(ExprTokenType *aParam[], int aParamCount, ResultToken *apResultToken = nullptr);
@@ -613,11 +619,11 @@ public:
 #endif
 	UINT_PTR DataPtr() { return (UINT_PTR)mData + ((mFlags & DataIsAllocatedFlag) ? sizeof(UINT_PTR) : 0); }
 	UINT_PTR DataSize() { return (mFlags & DataIsAllocatedFlag) ? *(UINT_PTR*)mData : 0; }
-	UINT_PTR StructSize() { return (mFlags & DataIsStructInfo) ? ((StructInfo*)mData)->size : mBase ? mBase->StructSize() : 0; }
+	UINT_PTR StructSize();
 	UINT_PTR LockStructSize() { auto si = GetStructInfo(); return si ? si->size : 0; }
 	
 	bool GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass);
-	MdType GetStructMdType() { return (mFlags & DataIsStructInfo) && !((StructInfo*)mData)->item_count ? ((StructInfo*)mData)->native_type : MdType::Void; }
+	MdType GetStructMdType();
 
 	// Methods and functions:
 	void DeleteProp(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);

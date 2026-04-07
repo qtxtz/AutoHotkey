@@ -297,7 +297,7 @@ void Object::SetDataPtr(UINT_PTR aPtr)
 	if (mFlags & DataIsAllocatedFlag)
 		free(mData);
 	mData = (void*)aPtr;
-	mFlags = (mFlags & ~(DataIsAllocatedFlag | DataIsStructInfo)) | DataIsSetFlag;
+	mFlags = (mFlags & ~DataIsAllocatedFlag) | DataIsSetFlag;
 }
 
 
@@ -335,7 +335,7 @@ FResult Object::AllocDataPtr(UINT_PTR aSize)
 		free(mData);
 	*p = aSize;
 	mData = p;
-	mFlags = DataIsAllocatedFlag | DataIsSetFlag | (mFlags & ~DataIsStructInfo);
+	mFlags |= DataIsAllocatedFlag | DataIsSetFlag;
 	return OK;
 }
 
