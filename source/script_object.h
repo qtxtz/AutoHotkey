@@ -383,8 +383,8 @@ private:
 		return SetInternalCapacity(mFields.Capacity() ? mFields.Capacity() * 2 : 4);
 	}
 	
-	StructInfo *GetStructInfoDefine();
 	StructInfo *GetStructInfo();
+	StructInfo *GetStructInfo(bool aLock);
 
 protected:
 	ResultType GetProperty(ResultToken &aResultToken, int aFlags, name_t aName, ExprTokenType &aThisToken, ExprTokenType *aParam[], int aParamCount);
@@ -546,7 +546,7 @@ public:
 	bool DefineMethod(name_t aName, IObject *aFunc);
 	void DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass = false);
 	
-	static void CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass, StructInfo *aNative = nullptr);
+	static void CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass);
 	static Object *CreatePtrClass(Object *sc, Object *sp, StructInfo *spsi);
 	static void CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClass, size_t aCount);
 

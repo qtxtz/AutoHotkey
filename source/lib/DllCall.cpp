@@ -370,25 +370,23 @@ void ConvertDllArgType(LPTSTR aBuf, DYNAPARM &aDynaParam)
 
 bool Object::GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass)
 {
-	if (auto si = GetStructInfo())
+	auto &si = *GetStructInfo(true);
+	if (!si.size)
+		return false;
+	if (si.dllcall_type)
 	{
-		if (si->dllcall_type)
-		{
-			aType.type = (DllArgTypes)si->dllcall_type;
-			aType.is_unsigned = si->is_unsigned;
-			aType.passed_by_address = si->pointed_class != nullptr;
-			aPointedClass = nullptr;
-			return true;
-		}
-		else if (si->size)
-		{
-			aType.type = DLL_ARG_STRUCT;
-			aType.struct_size = si->item_count ? -1 : (int)si->size;
-			aPointedClass = si->pointed_class;
-			return true;
-		}
+		aType.type = (DllArgTypes)si.dllcall_type;
+		aType.is_unsigned = si.is_unsigned;
+		aType.passed_by_address = si.pointed_class != nullptr;
+		aPointedClass = nullptr;
 	}
-	return false;
+	else
+	{
+		aType.type = DLL_ARG_STRUCT;
+		aType.struct_size = si.item_count ? -1 : (int)si.size;
+		aPointedClass = si.pointed_class;
+	}
+	return true;
 }
 
 

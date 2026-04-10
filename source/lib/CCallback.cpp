@@ -413,7 +413,7 @@ bif_impl FResult CallbackCreate(IObject *func, optl<StrArg> aOptions, ExprTokenT
 					auto proto = cls->ClassGetPrototype();
 					if (proto && proto->IsDerivedFrom(Object::sStructPrototype))
 					{
-						at[i].type = ((Object*)proto)->GetStructMdType();
+						at[i].type = proto->GetStructMdType();
 						if (at[i].type == MdType::Void)
 						{
 							at[i].type = MdType::Struct;
