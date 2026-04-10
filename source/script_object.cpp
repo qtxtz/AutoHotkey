@@ -143,11 +143,12 @@ Object *Object::Create(ExprTokenType *aParam[], int aParamCount, ResultToken *ap
 	return obj;
 }
 
-Object *Object::CreateStruct()
+Object *Object::CreateStruct(UINT_PTR aPtr, Object *aBase)
 {
 	Object *obj = new Object();
 	obj->mFlags |= CannotOwnProps;
-	obj->SetBase(Object::sStructPrototype);
+	obj->SetDataPtr(aPtr);
+	obj->SetBase(aBase);
 	return obj;
 }
 
@@ -1130,7 +1131,7 @@ BIF_DECL(NewStruct)
 	if (!proto)
 		_f_throw_value(_T("Invalid class"));
 	Object *obj = Object::CreateStruct(proto);
-	obj->New(aResultToken, proto, aParam + 1, aParamCount - 1);
+	obj->Initialize(aResultToken, aParam + 1, aParamCount - 1);
 }
 
 
@@ -2385,17 +2386,15 @@ ResultType Object::New(ResultToken &aResultToken, ExprTokenType *aParam[], int a
 	}
 	if (!CanSetBase(proto))
 		return aResultToken.ValueError(ERR_INVALID_BASE);
-	return New(aResultToken, proto, aParam + 1, aParamCount - 1);
+	SetBase(proto);
+	return Initialize(aResultToken, aParam + 1, aParamCount - 1);
 }
 
-ResultType Object::New(ResultToken &aResultToken, Object *proto, ExprTokenType *aParam[], int aParamCount, Object *aOuter)
+ResultType Object::Initialize(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, Object *aOuter)
 {
-	ASSERT(proto && (proto == mBase || proto->IsDerivedFrom(mBase)));
-	if (proto != mBase)
-		SetBase(proto);
-	if (auto si = proto->GetStructInfo()) // Typed properties are defined.
+	if (auto si = mBase->GetStructInfo())
 	{
-		if (!mData && si->size)
+		if (!mData && si->size) // Typed properties are defined but no space is allocated yet.
 		{
 			if (FAILED(AllocDataPtr(si->size)))
 			{
@@ -2434,7 +2433,7 @@ ResultType Object::New(ResultToken &aResultToken, Object *proto, ExprTokenType *
 		mNested[0] = aOuter;
 		aOuter->AddRef();
 	}
-	return Construct(aResultToken, aParam, aParamCount);
+	return CallInitNew(aResultToken, aParam, aParamCount);
 }
 
 ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
@@ -2473,15 +2472,14 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 	{
 		if (!mNested[i]) // Possible in case of redefinition via DefineProp, or Ptr classes.
 			continue;
-		auto nested = CreateStruct();
-		nested->SetDataPtr(data_ptr + offsets[i-1]);
 		auto proto = mNested[i]->ClassGetPrototype();
-		if (!proto || !nested->CanSetBase(proto)) // FIXME: make this check unnecessary, either by making StructClass.Prototype read-only or storing the prototype elsewhere
+		if (!proto) // FIXME: make this check unnecessary, either by making StructClass.Prototype read-only or storing the prototype elsewhere
 		{
 			result = aResultToken.Error(_T("Bad Prototype"), nullptr, ErrorPrototype::Type);
 			break;
 		}
-		result = nested->New(aResultToken, proto, nullptr, 0, this);
+		auto nested = CreateStruct(data_ptr + offsets[i - 1], proto);
+		result = nested->Initialize(aResultToken, nullptr, 0, this);
 		if (result != OK)
 			break;
 		// During construction, 'nested' has a non-zero mRefCount and a counted reference to 'this'.
@@ -2518,9 +2516,8 @@ ResultType Object::CArrayNew(ResultToken &aResultToken, StructInfo *si)
 	size_t i;
 	for (i = 1; i <= si->nested_count; ++i, data_ptr += item_size)
 	{
-		auto nested = CreateStruct();
-		nested->SetDataPtr(data_ptr);
-		result = nested->New(aResultToken, item_base, nullptr, 0, this);
+		auto nested = CreateStruct(data_ptr, item_base);
+		result = nested->Initialize(aResultToken, nullptr, 0, this);
 		if (result != OK)
 			break;
 		// During construction, 'nested' has a non-zero mRefCount and a counted reference to 'this'.
@@ -2572,7 +2569,7 @@ ResultType Object::NestedSparseInit(ResultToken& aResultToken, TypedProperty& aP
 	return OK;
 }
 
-ResultType Object::Construct(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount)
+ResultType Object::CallInitNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount)
 {
 	ExprTokenType this_token(this);
 	ResultType result;
@@ -2595,10 +2592,10 @@ ResultType Object::Construct(ResultToken &aResultToken, ExprTokenType *aParam[],
 		}
 	}
 
-	return ConstructNoInit(aResultToken, aParam, aParamCount, this_token);
+	return CallNew(aResultToken, aParam, aParamCount, this_token);
 }
 
-ResultType Object::ConstructNoInit(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken)
+ResultType Object::CallNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken)
 {
 	// __New may be defined by the script for custom initialization code.
 	auto result = CallMeta(_T("__New"), aResultToken, aThisToken, aParam, aParamCount);
@@ -4492,7 +4489,7 @@ BIF_DECL(Class_GetNestedClass)
 	if (info->constructed)
 		_f_return(cls);
 	info->constructed = true;
-	cls->Construct(aResultToken, nullptr, 0);
+	cls->CallInitNew(aResultToken, nullptr, 0);
 }
 
 
@@ -4503,8 +4500,8 @@ BIF_DECL(Class_CallNestedClass)
 	if (!info->constructed)
 	{
 		info->constructed = true;
-		cls->AddRef(); // Necessary because Construct() calls Release() on failure/exit.
-		if (cls->Construct(aResultToken, nullptr, 0) != OK) // FAIL or EXIT
+		cls->AddRef(); // Necessary because CallInitNew() calls Release() on failure/exit.
+		if (cls->CallInitNew(aResultToken, nullptr, 0) != OK) // FAIL or EXIT
 			return;
 		cls->Release();
 		aResultToken.InitResult(aResultToken.buf);
@@ -4548,5 +4545,5 @@ BIF_DECL(Class_New)
 
 	// Don't call any inherited __Init, since that would reinitialize static variables and duplicate
 	// any typed properties defined by that one class.  This either releases or returns class_obj:
-	class_obj->ConstructNoInit(aResultToken, aParam, aParamCount, ExprTokenType(class_obj));
+	class_obj->CallNew(aResultToken, aParam, aParamCount, ExprTokenType(class_obj));
 }

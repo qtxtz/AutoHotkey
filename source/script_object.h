@@ -426,17 +426,17 @@ public:
 
 	static Object *Create();
 	static Object *Create(ExprTokenType *aParam[], int aParamCount, ResultToken *apResultToken = nullptr);
-	static Object *CreateStruct();
+	static Object *CreateStruct(UINT_PTR aPtr, Object *aBase);
 	static Object *CreateStruct(Object *aBase);
 	static Object *CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken, bool aCopy = false);
-	
+
 	static ResultType ApplyParams(ResultToken &aThisResultToken, int aFlags, ExprTokenType *aParam[], int aParamCount);
 
 	ResultType New(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
-	ResultType New(ResultToken &aResultToken, Object *aPrototype, ExprTokenType *aParam[], int aParamCount, Object *aOuter = nullptr);
-	ResultType Construct(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
-	ResultType ConstructNoInit(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken);
-	
+	ResultType Initialize(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, Object *aOuter = nullptr);
+	ResultType CallInitNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
+	ResultType CallNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken);
+
 	class PropEnum;
 
 	bool HasProp(name_t aName);
