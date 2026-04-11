@@ -357,7 +357,7 @@ protected:
 		ClassPrototype = 0x01,
 		NativeClassPrototype = 0x02,
 		DataIsSetFlag = 0x04,
-		DataIsAllocatedFlag = 0x08,
+		//unused = 0x08,
 		StructInfoInitialized = 0x10,
 		StructInfoLocked = 0x20,
 		NoCallDelete = 0x40,
@@ -619,7 +619,6 @@ public:
 	void PropCount(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	void SetDataPtr(UINT_PTR aPtr);
 	FResult GetDataPtr(UINT_PTR &aPtr);
-	FResult AllocDataPtr(UINT_PTR aSize);
 	UINT_PTR DataPtr() { return (UINT_PTR)mData; }
 	UINT_PTR StructSize();
 	UINT_PTR LockStructSize() { auto si = GetStructInfo(); return si ? si->size : 0; }

@@ -292,10 +292,8 @@ bif_impl FResult ObjSetDataPtr(IObject *aObj, UINT_PTR aPtr)
 
 void Object::SetDataPtr(UINT_PTR aPtr)
 {
-	if (mFlags & DataIsAllocatedFlag)
-		free(mData);
 	mData = (void*)aPtr;
-	mFlags = (mFlags & ~DataIsAllocatedFlag) | DataIsSetFlag;
+	mFlags |= DataIsSetFlag;
 }
 
 
@@ -311,19 +309,6 @@ FResult Object::GetDataPtr(UINT_PTR &aPtr)
 	if (!(mFlags & DataIsSetFlag))
 		return FR_E_FAILED;
 	aPtr = DataPtr();
-	return OK;
-}
-
-
-FResult Object::AllocDataPtr(UINT_PTR aSize)
-{
-	auto p = (UINT_PTR*)malloc(aSize);
-	if (!p)
-		return FR_E_OUTOFMEM;
-	if (mFlags & DataIsAllocatedFlag)
-		free(mData);
-	mData = p;
-	mFlags |= DataIsAllocatedFlag | DataIsSetFlag;
 	return OK;
 }
 

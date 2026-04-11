@@ -610,8 +610,6 @@ Object::~Object()
 	}
 	if (mBase)
 		mBase->Release();
-	if (mFlags & DataIsAllocatedFlag)
-		free(mData);
 	if (mFlags & StructInfoInitialized)
 	{
 		auto &si = *(StructInfo*)(this + 1);
@@ -2396,15 +2394,7 @@ ResultType Object::Initialize(ResultToken &aResultToken, ExprTokenType *aParam[]
 {
 	if (auto si = mBase->GetStructInfo(true))
 	{
-		if (!mData && si->size) // Typed properties are defined but no space is allocated yet.
-		{
-			if (FAILED(AllocDataPtr(si->size)))
-			{
-				Release();
-				return aResultToken.MemoryError();
-			}
-			ZeroMemory((void*)DataPtr(), si->size);
-		}
+		ASSERT(mData || !si->size);
 		if (si->nested_count)
 		{
 			mNested = new (std::nothrow) Object * [si->nested_count + 1];
