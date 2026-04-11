@@ -4532,11 +4532,11 @@ BIF_DECL(Class_New)
 	// Class(unset) would have thrown ERR_TOO_MANY_PARAMS, so is exempted from this.
 	if (aParamCount == 1)
 	{
-		Object *obj = Object::Create();
-		if (!obj)
-			_f_throw_oom;
-		obj->New(aResultToken, aParam, aParamCount);
-		return;
+		NewInstanceParam a;
+		a.create = NewObject<Object>;
+		a.prototype = Object::sPrototype;
+		aResultToken.callee_id = &a;
+		return NewInstance(aResultToken, aParam, aParamCount);
 	}
 
 	// aParam[0] is implicit and mandatory, as this is a method.  Usually it should be Class itself,
