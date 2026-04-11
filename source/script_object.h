@@ -437,7 +437,6 @@ public:
 
 	static ResultType ApplyParams(ResultToken &aThisResultToken, int aFlags, ExprTokenType *aParam[], int aParamCount);
 
-	ResultType New(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
 	ResultType Initialize(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, Object *aOuter = nullptr);
 	ResultType CallInitNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
 	ResultType CallNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken);
@@ -1011,7 +1010,6 @@ public:
 	ClipboardAll() : BufferObject() {}
 	static ObjectMember sMembers[];
 	static Object *sPrototype;
-	static Object *Create();
 	void __New(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 };
 

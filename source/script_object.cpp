@@ -2392,21 +2392,6 @@ void PropRef::__Value(ResultToken &aResultToken, int aID, int aFlags, ExprTokenT
 // Class objects
 //
 
-ResultType Object::New(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount)
-{
-	Object *base = dynamic_cast<Object *>(ParamIndexToObject(0));
-	Object *proto = base ? dynamic_cast<Object *>(base->GetOwnPropObj(_T("Prototype"))) : nullptr;
-	if (!proto)
-	{
-		Release();
-		return aResultToken.ParamError(0, aParam[0]);
-	}
-	if (!CanSetBase(proto))
-		return aResultToken.ValueError(ERR_INVALID_BASE);
-	SetBase(proto);
-	return Initialize(aResultToken, aParam + 1, aParamCount - 1);
-}
-
 ResultType Object::Initialize(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, Object *aOuter)
 {
 	if (auto si = mBase->GetStructInfo(true))
@@ -4121,14 +4106,6 @@ void ClipboardAll::__New(ResultToken &aResultToken, int aID, int aFlags, ExprTok
 		free(mData); // In case of explicit call to __New.
 	mData = data;
 	mSize = size;
-}
-
-
-Object *ClipboardAll::Create()
-{
-	auto obj = new ClipboardAll();
-	obj->SetBase(ClipboardAll::sPrototype);
-	return obj;
 }
 
 
