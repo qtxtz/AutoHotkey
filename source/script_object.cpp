@@ -176,8 +176,11 @@ BIF_DECL(NewInstance)
 {
 	auto &a = *(NewInstanceParam*)aResultToken.callee_id;
 	IObject *cls = ParamIndexToObject(0);
-	Object *proto = cls && cls->IsOfType(Object::sPrototype) ? ((Object*)cls)->ClassGetPrototype() : nullptr;
-	if (proto != a.prototype && !proto->IsDerivedFrom(a.prototype))
+	// For backward-compatibility, this must permit any Object (not just a Class)
+	// with a Prototype own property which is any Object (not just a Prototype).
+	IObject *prt = cls && cls->IsOfType(Object::sPrototype) ? ((Object*)cls)->GetOwnPropObj(_T("Prototype")) : nullptr;
+	Object *proto = prt && prt->IsOfType(Object::sPrototype) ? (Object*)prt : nullptr;
+	if (proto != a.prototype && (!proto || !proto->IsDerivedFrom(a.prototype)))
 		_f_throw_value(ERR_INVALID_BASE);
 	Object *obj = Object::CreateInstance(a.create, proto);
 	obj->Initialize(aResultToken, aParam + 1, aParamCount - 1);
