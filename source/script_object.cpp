@@ -624,6 +624,11 @@ Object::~Object()
 	if (mFlags & StructInfoInitialized)
 	{
 		auto &si = *(StructInfo*)(this + 1);
+		for (TypedProperty *next, *tp = si.first_field; tp; tp = next)
+		{
+			next = tp->next_field;
+			delete tp;
+		}
 		// The pointer class holds a counted reference to the pointed class only while
 		// external references to the pointer class exist.  At this stage all external
 		// references to both have been released and pointed_class has been deleted.
@@ -2059,17 +2064,26 @@ Property *Object::DefineProperty(name_t aName, bool aEnumerable)
 
 TypedProperty *Object::DefineTypedProperty(name_t aName)
 {
+	ASSERT(mFlags & ClassPrototype);
 	index_t insert_pos;
 	auto field = FindField(aName, insert_pos);
-	if (!field && !(field = Insert(aName, insert_pos)))
-		return nullptr;
-	if (field->symbol != SYM_TYPED_FIELD)
-	{
+	if (field)
 		field->Free();
-		field->symbol = SYM_TYPED_FIELD;
-		field->tprop = new TypedProperty();
-	}
-	return field->tprop;
+	else if (!(field = Insert(aName, insert_pos)))
+		return nullptr;
+	auto tprop = new TypedProperty();
+	// Add it to the new field.
+	field->symbol = SYM_TYPED_FIELD;
+	field->tprop = tprop;
+	// Add it to the Prototype's linked list of struct fields.
+	auto &si = *(StructInfo*)(this + 1);
+	if (si.last_field)
+		si.last_field->next_field = tprop;
+	else
+		si.first_field = tprop;
+	tprop->next_field = nullptr;
+	si.last_field = tprop;
+	return tprop;
 }
 
 FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack, size_t aOffset)
@@ -2464,45 +2478,20 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 {
 	ASSERT(si->nested_count && mNested && !si->item_count);
 	
-	// TODO: probably make an ordered list in si during definition (or when the struct definition is finalized) instead of this?
-	auto offsets = (size_t*)_alloca(sizeof(size_t) * si->nested_count);
-	ZeroMemory(offsets, sizeof(size_t) * si->nested_count);
-
-	// First pass: gather class objects into definition order.
-	for (auto base = mBase; base; base = base->mBase)
-	{
-		if (!(base->mFlags & StructInfoInitialized))
-			continue;
-		for (index_t i = 0; i < base->mFields.Length(); ++i)
-		{
-			auto &field = base->mFields[i];
-			if (field.symbol == SYM_TYPED_FIELD && field.tprop->class_object && !field.tprop->pointed_proto)
-			{
-				ASSERT(field.tprop->object_index > 0);
-				ASSERT(field.tprop->object_index <= si->nested_count);
-				ASSERT(!mNested[field.tprop->object_index]); // Should always be null since every new property gets a new object_index, even if it shadows a base property.
-				mNested[field.tprop->object_index] = field.tprop->class_object;
-				offsets[field.tprop->object_index - 1] = field.tprop->data_offset;
-			}
-		}
-	}
-
 	auto data_ptr = DataPtr();
 
-	// Second pass: construct objects.
 	ResultType result = OK;
-	size_t i;
-	for (i = 1; i <= si->nested_count; ++i)
+	for (auto tprop = si->first_field; tprop; tprop = tprop->next_field)
 	{
-		if (!mNested[i]) // Possible in case of redefinition via DefineProp, or Ptr classes.
+		if (!tprop->class_object || tprop->pointed_proto) // Primitive or Ptr
 			continue;
-		auto proto = mNested[i]->ClassGetPrototype();
+		auto proto = tprop->class_object->ClassGetPrototype();
 		if (!proto) // FIXME: make this check unnecessary, either by making StructClass.Prototype read-only or storing the prototype elsewhere
 		{
 			result = aResultToken.Error(_T("Bad Prototype"), nullptr, ErrorPrototype::Type);
 			break;
 		}
-		auto nested = CreateStructPtr(proto, data_ptr + offsets[i - 1], 0); // aFlags = 0 so __Delete will be called.
+		auto nested = CreateStructPtr(proto, data_ptr + tprop->data_offset, 0); // aFlags = 0 so __Delete will be called.
 		result = nested->Initialize(aResultToken, nullptr, 0, this);
 		if (result != OK)
 			break;
@@ -2512,13 +2501,10 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 		mRefCount--;
 		aResultToken.symbol = SYM_INTEGER; // New has set this to nested.  Reset to default without calling Release().
 		ASSERT(nested->mRefCount == 0 && mRefCount);
-		mNested[i] = nested;
+		mNested[tprop->object_index] = nested;
 	}
-	if (i <= si->nested_count)
+	if (result != OK)
 	{
-		ASSERT(result != OK);
-		// Clear any pointers stored in the first pass, since AddRef() wasn't called.
-		do mNested[i++] = nullptr; while (i <= si->nested_count);
 		// this object won't be returned, since construction failed.
 		Release();
 	}
@@ -2767,8 +2753,8 @@ bool Object::Variant::InitCopy(Variant &val)
 		if (auto obj = prop->Method()) obj->AddRef();
 		break;
 	case SYM_TYPED_FIELD:
-		tprop = new TypedProperty();
-		*tprop = *val.tprop;
+		// FIXME: This and other parts of the cloning process do not support typed properties.
+		AssignMissing();
 		break;
 	//case SYM_INTEGER:
 	//case SYM_FLOAT:
@@ -2859,7 +2845,6 @@ void Object::Variant::Free()
 	case SYM_STRING: string.~String(); break;
 	case SYM_OBJECT: object->Release(); break;
 	case SYM_DYNAMIC: delete prop; break;
-	case SYM_TYPED_FIELD: delete tprop; break;
 	}
 }
 

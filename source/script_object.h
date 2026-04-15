@@ -270,6 +270,7 @@ struct TypedProperty
 	size_t data_offset;
 	size_t object_index;
 	size_t item_count;
+	TypedProperty *next_field;
 	~TypedProperty();
 };
 
@@ -344,6 +345,7 @@ protected:
 		size_t align;
 		size_t nested_count;
 		size_t item_count; // Separate from nested_count for simplicity maintainability (since arrays of numbers have no nested objects).
+		TypedProperty *first_field, *last_field;
 		Object *pointed_class;
 		Object *pointer_class;
 		Map *array_class_map;
@@ -427,8 +429,6 @@ protected:
 	ResultType NestedSparseInit(ResultToken& aResultToken, TypedProperty& aProp, UINT_PTR aPtr);
 	ResultType CArrayNew(ResultToken &aResultToken, StructInfo *si);
 	
-	static Object *CreateInstance(Object *aBase, StructInfo &si);
-
 public:
 
 	void *operator new(size_t aObjectSize);
