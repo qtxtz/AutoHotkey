@@ -385,7 +385,6 @@ protected:
 private:
 	Object *mBase = nullptr;
 	FlatVector<FieldType, index_t> mFields;
-	void *mData = nullptr;
 	Object *mOuter = nullptr;
 
 	FieldType *FindField(name_t name, index_t &insert_pos);
