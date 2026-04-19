@@ -1193,7 +1193,7 @@ void Object::CArrayItem(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 	ASSERT(si->size == item_size * si->item_count);
 	// TODO: cache some of the above information in si->first_field ?
 
-	TypedProperty tp{ si->native_type, item_class, pointed_proto, (size_t)index * item_size, si->object_size + index * nested_size };
+	TypedProperty tp{ si->native_type, item_class, pointed_proto, (size_t)index * item_size, si->object_size + (size_t)index * nested_size };
 	if (IS_INVOKE_GET)
 		GetTypedValue(aResultToken, 0, tp);
 	else
