@@ -9780,8 +9780,7 @@ end_of_infix_to_postfix:
 		}
 		// Count the tokens which potentially use to_free[].
 		if (new_token.symbol == SYM_DYNAMIC || new_token.symbol == SYM_FUNC
-			|| new_token.symbol == SYM_CONCAT || new_token.symbol == SYM_REF
-			|| new_token.symbol == SYM_VAR)
+			|| new_token.symbol == SYM_CONCAT || new_token.symbol == SYM_VAR)
 			++max_alloc;
 	}
 	aArg.postfix[postfix_count].symbol = SYM_INVALID;  // Special item to mark the end of the array.
@@ -11348,8 +11347,6 @@ ResultType Line::PerformLoopFor(ResultToken *aResultToken, Line *&aJumpToLine, L
 			var->Free(VAR_NEVER_FREE | VAR_CLEAR_ALIASES); // Release var's reference to the VarRef.
 			var->Restore(var_bkp[i]);
 		}
-		if (var_param[i]->symbol == SYM_OBJECT)
-			var_param[i]->object->Release();
 	}
 	return result; // The script's loop is now over.
 }

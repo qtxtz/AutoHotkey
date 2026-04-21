@@ -804,7 +804,6 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 			this_token.SetValue(right.var->GetRef());
 			if (!this_token.object)
 				goto outofmem;
-			to_free[to_free_count++] = &this_token;
 			break;
 
 		case SYM_POST_INCREMENT: // These were added in v1.0.46.  It doesn't seem worth translating them into
@@ -1997,7 +1996,6 @@ bool UserFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aPar
 						auto ref = token.var->GetRef();
 						if (!ref)
 							goto free_and_return;
-						ref->Release(); // token.var retains a reference; release ours.
 						// Point our freevar to the caller's freevar, for use by our closures.
 						this_formal_param.var->GetAliasFor()->UpdateAlias(token.var);
 						// Also update our local alias below.
