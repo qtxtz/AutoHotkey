@@ -1130,7 +1130,7 @@ FResult GuiType::set_MenuBar(ExprTokenType &aParam)
 {
 	GUI_MUST_HAVE_HWND;
 	UserMenu *menu = NULL;
-	if (!TokenIsEmptyString(aParam))
+	if (!TokenIsBlank(aParam))
 	{
 		menu = dynamic_cast<UserMenu *>(TokenToObject(aParam));
 		if (!menu || menu->mMenuType != MENU_TYPE_BAR)

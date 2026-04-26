@@ -1600,7 +1600,7 @@ int Debugger::ParsePropertyName(LPWSTR aNamePtr, int aDepth, int aVarScope, Expr
 					// `property_set -n <exception> --` is our non-standard way to "clear the exception" (suppress the error dialog).
 					if (aSetValue)
 					{
-						if (!TokenIsEmptyString(*aSetValue))
+						if (!TokenIsBlank(*aSetValue))
 						{
 							err = DEBUGGER_E_INVALID_OPTIONS;
 							break;

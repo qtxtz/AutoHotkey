@@ -2685,7 +2685,7 @@ ToggleValueType TokenToToggleValue(ExprTokenType &aToken);
 SymbolType TokenIsNumeric(ExprTokenType &aToken);
 SymbolType TokenIsPureNumeric(ExprTokenType &aToken);
 SymbolType TokenIsPureNumeric(ExprTokenType &aToken, SymbolType &aIsImpureNumeric);
-BOOL TokenIsEmptyString(ExprTokenType &aToken);
+BOOL TokenIsBlank(ExprTokenType &aToken);
 SymbolType TypeOfToken(ExprTokenType &aToken);
 __int64 TokenToInt64(ExprTokenType &aToken);
 double TokenToDouble(ExprTokenType &aToken, BOOL aCheckForHex = TRUE);

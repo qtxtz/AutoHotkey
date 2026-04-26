@@ -3362,7 +3362,7 @@ SymbolType TokenIsPureNumeric(ExprTokenType &aToken, SymbolType &aNumType)
 }
 
 
-BOOL TokenIsEmptyString(ExprTokenType &aToken)
+BOOL TokenIsBlank(ExprTokenType &aToken)
 {
 	switch (aToken.symbol)
 	{
@@ -3370,10 +3370,8 @@ BOOL TokenIsEmptyString(ExprTokenType &aToken)
 		return !*aToken.marker;
 	case SYM_VAR:
 		return !aToken.var->HasContents();
-	//case SYM_MISSING: // This case is omitted because it currently should be
-		// impossible for all callers except for ParamIndexIsOmittedOrEmpty(),
-		// which checks for it explicitly.
-		//return TRUE;
+	case SYM_MISSING:
+		return TRUE;
 	default:
 		return FALSE;
 	}

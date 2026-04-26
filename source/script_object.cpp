@@ -51,7 +51,7 @@ ResultType CallMethod(IObject *aInvokee, IObject *aThis, LPTSTR aMethodName
 			result = TokenToBOOL(result_token) ? CONDITION_TRUE : CONDITION_FALSE;
 		else
 			// Indicate to caller whether an integer value was returned (for MsgMonitor()).
-			result = TokenIsEmptyString(result_token) ? OK : EARLY_RETURN;
+			result = TokenIsBlank(result_token) ? OK : EARLY_RETURN;
 	}
 	
 	if (aRetVal) // Always set this as some callers don't initialize it:
