@@ -1810,6 +1810,7 @@ ResultType Script::LoadIncludedFile(TextStream *fp)
 	bool blocks_previously_open = mLineParent || mClassObjectCount; // For error detection.
 
 	auto module_previously_open = mCurrentModule;
+	bool caller_backcompatmode = mBackCompatMode;
 
 	LineBuffer buf, next_buf;
 	size_t &buf_length = buf.length, &next_buf_length = next_buf.length;
@@ -2494,6 +2495,9 @@ continue_main_loop: // This method is used in lieu of "continue" for performance
 
 	if (mCurrentModule != module_previously_open)
 		ReopenModule(module_previously_open);
+
+	// "#Requires AutoHotkey v2.1-" suppresses this mode until EOF.
+	mBackCompatMode = caller_backcompatmode;
 
 	return OK;
 }
@@ -3966,12 +3970,24 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 
 			if (IS_SPACE_OR_TAB(parameter[10]))
 			{
+				bool set_bc_mode = false, bc_mode = true;
 				TCHAR word[32];
 				for (LPCTSTR end, cp = parameter + 11; ; cp = end)
 				{
 					cp = omit_leading_whitespace(cp);
 					if (!*cp)
+					{
+						if (set_bc_mode)
+						{
+							if (!mCurrentModule->mBackCompatModeWasSet)
+							{
+								mCurrentModule->mBackCompatModeWasSet = true;
+								mCurrentModule->mBackCompatMode = bc_mode;
+							}
+							mBackCompatMode = bc_mode;
+						}
 						return CONDITION_TRUE;
+					}
 					
 					for (end = cp; *end && !IS_SPACE_OR_TAB(*end); ++end);
 					tcslcpy(word, cp, min(_countof(word), end - cp + 1));
@@ -3980,11 +3996,13 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 					if (!_tcsicmp(word, _T(AHK_BIT)))
 						continue;
 
-					// It's either an unment requirement or a version number.
-					if (VersionSatisfies(T_AHK_VERSION, word))
-						continue;
-
-					break;
+					// It's either an unmet requirement or a version number.
+					if (!VersionSatisfies(T_AHK_VERSION, word))
+						break;
+					
+					// Set compatibility mode based on whether 2.0.x would also meet the requirement.
+					bc_mode = bc_mode && VersionSatisfies(_T("2.0.x"), word);
+					set_bc_mode = true;
 				}
 			}
 		}
@@ -3993,19 +4011,6 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 #endif
 	}
 	
-	if (IS_DIRECTIVE_MATCH(_T("#DefaultReturn")))
-	{
-		if (!parameter)
-			return ScriptError(ERR_PARAM1_REQUIRED);
-		if (!_tcsicmp(parameter, _T("unset")))
-			mDefaultReturn = SYM_MISSING;
-		else if (!_tcsicmp(parameter, _T("\"\""))) // Enforce consistency for this back-compat switch; require "" and not ''.
-			mDefaultReturn = SYM_STRING;
-		else
-			return ScriptError(ERR_PARAM1_INVALID, parameter);
-		return CONDITION_TRUE;
-	}
-
 	if (IS_DIRECTIVE_MATCH(_T("#Module")))
 	{
 		if (mLineParent || mClassObjectCount || mPendingHotkey)
@@ -5062,7 +5067,7 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 		mIgnoreNextBlockBegin = false;
 		return OK;
 	}
-	if (aActionType == ACT_RETURN && !aArgc && g->CurrentFunc && mDefaultReturn == SYM_MISSING) // SYM_STRING needs no handling as it is the real default, for now.
+	if (aActionType == ACT_RETURN && !aArgc && g->CurrentFunc && !g->CurrentFunc->mBackCompatMode) // ACT_RETURN without args returns "", so v2.1 mode needs the following.
 	{
 		aArg = (LPTSTR*)_alloca(sizeof(LPTSTR*));
 		*aArg = _T("unset");
@@ -5366,7 +5371,7 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 
 		if (g->CurrentFunc && g->CurrentFunc == mLineParent->mAttribute)
 		{
-			g->CurrentFunc->mDefaultReturnUnset = mDefaultReturn == SYM_MISSING;
+			mBackCompatMode = g->CurrentFunc->mBackCompatMode; // Revert any change made by #Requires *within* this function.
 			line.mAttribute = g->CurrentFunc;  // Flag this ACT_BLOCK_END as the ending brace of this function's body.
 			g->CurrentFunc = g->CurrentFunc->mOuterFunc;  // Step out of this function.
 			if (g->CurrentFunc && !g->CurrentFunc->mJumpToLine)
@@ -6970,6 +6975,7 @@ UserFunc *Script::AddFunc(LPCTSTR aFuncName, size_t aFuncNameLength, FuncDefType
 
 	the_new_func->mModule = mCurrentModule;
 	the_new_func->mIsFuncExpression = aIsInExpression;
+	the_new_func->mBackCompatMode = mBackCompatMode;
 
 	if (aClassObject)
 	{
@@ -10931,7 +10937,7 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 		case ACT_BLOCK_END:
 			// v2.1: This is handled at runtime rather than by inserting ACT_RETURN avoid complications
 			// with 1) auto-generated __Init methods, and 2) #Warn Unreachable.
-			if (line->mAttribute && ((UserFunc*)line->mAttribute)->mDefaultReturnUnset && aResultToken)
+			if (line->mAttribute && ((UserFunc*)line->mAttribute)->mBackCompatMode == false && aResultToken)
 				aResultToken->symbol = SYM_MISSING;
 			// v2: This check is disabled to reduce code size, as it doesn't seem to be needed
 			// now that GOSUB has been removed.  Validation in PreparseBlocks() should make it

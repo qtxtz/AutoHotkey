@@ -1501,7 +1501,7 @@ public:
 	// Keep small members adjacent to each other to save space and improve perf. due to byte alignment:
 	FuncDefType mIsFuncExpression; // Whether this function was defined *within* an expression and is therefore allowed under a control flow statement.
 	bool mIsStatic = false; // Whether the "static" keyword was used with a function (not method); this prevents a nested function from becoming a closure.
-	bool mDefaultReturnUnset = false; // Whether "#DefaultReturn unset" was in effect for the function's block end.
+	bool mBackCompatMode; // true = requires v2.0, false = requires v2.1
 #define VAR_DECLARE_GLOBAL (VAR_DECLARED | VAR_GLOBAL)
 #define VAR_DECLARE_LOCAL  (VAR_DECLARED | VAR_LOCAL)
 #define VAR_DECLARE_STATIC (VAR_DECLARED | VAR_LOCAL | VAR_LOCAL_STATIC)
@@ -2166,9 +2166,9 @@ private:
 	LPCTSTR mPendingHotkey = nullptr; // The name of a hotkey or hotstring awaiting its block/function.
 	PartialExpression *mExprContainingThisFunc = nullptr;
 	int mExprFuncIndex = INT_MAX;
-	SymbolType mDefaultReturn = SYM_STRING;
 	bool mNextLineIsFunctionBody; // Whether the very next line to be added will be the first one of the body.
 	bool mIgnoreNextBlockBegin;
+	bool mBackCompatMode = true; // Most recently set compatibility mode, used only during load-time.  true = requires v2.0, false = requires v2.1
 
 #define MAX_NESTED_CLASSES 5
 #define MAX_CLASS_NAME_LENGTH UCHAR_MAX
