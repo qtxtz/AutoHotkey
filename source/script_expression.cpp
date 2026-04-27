@@ -419,30 +419,19 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 
 			if (result_token.symbol != SYM_STRING)
 			{
-				if (result_token.symbol == SYM_MISSING && !(flags & EIF_UNSET_RETURN))
+				if (result_token.symbol == SYM_MISSING && !(flags & EIF_UNSET_RETURN)) // Result is unset and not marked with ?/??.
 				{
+					if (result_token.unset_kind == UnsetKind::Blank && g_script.BackCompatMode())
+					{
+						this_token.SetValue(_T(""), 0);
+						goto push_this_token;
+					}
 					Object *err;
 					LPCTSTR msg;
-					if (result_token.unset_kind == UnsetKind::Unspecified)
-						result_token.unset_kind = (flags & IT_BITMASK) == IT_GET && !member ? UnsetKind::UnsetItem : UnsetKind::Unset;
-					switch (result_token.unset_kind)
-					{
-					case UnsetKind::Blank:
-						if (g_script.BackCompatMode())
-						{
-							this_token.SetValue(_T(""), 0);
-							goto push_this_token;
-						}
-						// Fall through:
-					default:
-						err = ErrorPrototype::Unset;
-						msg = _T("No value was returned.");
-						break;
-					case UnsetKind::UnsetItem:
-						err = ErrorPrototype::UnsetItem;
-						msg = ERR_ITEM_UNSET;
-						break;
-					}
+					if ((flags & IT_BITMASK) == IT_GET && !member)
+						err = ErrorPrototype::UnsetItem, msg = ERR_ITEM_UNSET;
+					else
+						err = ErrorPrototype::Unset, msg = _T("No value was returned.");
 					result_token.Error(msg, this_token.error_reporting_marker, err);
 					aResult = result_token.Result(); // FAIL to abort, OK if user or OnError requested continuation.
 					goto abort_if_result;

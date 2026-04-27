@@ -1318,7 +1318,11 @@ void Map::__Item(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *
 			{
 				auto result = Invoke(aResultToken, IT_GET, _T("Default"), ExprTokenType { this }, nullptr, 0);
 				if (result == INVOKE_NOT_HANDLED)
-					_o_return_unset_item;
+				{
+					if (g_script.BackCompatMode())
+						_o_throw(ERR_ITEM_UNSET, *aParam[0], ErrorPrototype::UnsetItem);
+					_o_return_unset;
+				}
 				return;
 			}
 			// Otherwise, caller provided a default value.
@@ -1860,7 +1864,7 @@ void Object::DeleteProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 {
 	auto field = FindField(ParamIndexToString(0, _f_number_buf));
 	if (!field)
-		_o_return_empty;
+		_o_return_unset_blank;
 	field->ReturnMove(aResultToken); // Return the removed value.
 	mFields.Remove((index_t)(field - mFields), 1);
 }
@@ -1879,7 +1883,9 @@ void Map::Delete(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *
 	{
 		// Our return value when only one arg is given is supposed to be the value
 		// removed from this[arg], but there wasn't one.
-		_o_return_unset_item;
+		if (g_script.BackCompatMode())
+			_o_throw(ERR_ITEM_UNSET, *aParam[0], ErrorPrototype::UnsetItem);
+		_o_return_unset;
 	}
 	// Set return value to the removed item.
 	item->ReturnMove(aResultToken);
@@ -2399,7 +2405,11 @@ void Object::GetOwnPropDesc(ResultToken &aResultToken, int aID, int aFlags, Expr
 		_o_throw_param(0);
 	auto field = FindField(name);
 	if (!field)
-		_o__ret(aResultToken.UnknownMemberError(ExprTokenType(this), IT_GET, name));
+	{
+		if (g_script.BackCompatMode())
+			_o__ret(aResultToken.UnknownMemberError(ExprTokenType(this), IT_GET, name));
+		_o_return_unset;
+	}
 	auto desc = Object::Create();
 	desc->SetInternalCapacity(field->symbol == SYM_DYNAMIC ? 3 : 1);
 	if (field->symbol == SYM_DYNAMIC)
@@ -2827,7 +2837,8 @@ void Object::Variant::ReturnMove(ResultToken &result)
 		break;
 	case SYM_MISSING:
 		// This implements "blank if none" documented for some methods in v2.0.
-		// TODO: v2.1/future mode: return unset
+		result.Unset(UnsetKind::Blank); // Behaves as unset only in v2.1 mode.
+		break;
 	case SYM_DYNAMIC:
 	case SYM_TYPED_FIELD: // This is a field definition; it can't have a value.
 		result.SetValue(_T(""), 0);
@@ -3061,7 +3072,9 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 			auto result = Object::Invoke(aResultToken, IT_GET, _T("Default"), ExprTokenType{this}, nullptr, 0);
 			if (result != INVOKE_NOT_HANDLED)
 				_o_return_retval;
-			_o_return_unset_item;
+			if (g_script.BackCompatMode())
+				_o_throw(ERR_ITEM_UNSET, *aParam[0], ErrorPrototype::UnsetItem);
+			_o_return_unset;
 		}
 		item.ReturnRef(aResultToken);
 		_o_return_retval;

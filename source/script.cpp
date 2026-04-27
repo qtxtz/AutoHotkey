@@ -8850,7 +8850,7 @@ unquoted_literal:
 			infix[infix_count].error_reporting_marker = cp;
 			if (this_deref_ref.symbol == SYM_MISSING)
 			{
-				infix[infix_count].unset_kind = UnsetKind::Unspecified; // This is required for function return values.
+				infix[infix_count].unset_kind = UnsetKind::Unset; // This is required for function return values.
 				// Insert a SYM_MAYBE to handle validation.
 				infix_count++;
 				infix[infix_count].symbol = SYM_MAYBE;

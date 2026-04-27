@@ -238,9 +238,7 @@ enum SymbolType // For use with ExpandExpression() and IsNumeric().
 enum class UnsetKind
 {
 	Blank, // Reverts to "" in v2.0 mode.
-	Unset, // Throws UnsetError.
-	UnsetItem, // Throws UnsetItemError.
-	Unspecified // Throws UnsetError or UnsetItemError depending on how the function was called.
+	Unset // Throws UnsetError or UnsetItemError depending on how the function was called.
 };
 
 // This should include all operators which can produce SYM_VAR for a subsequent assignment:
@@ -414,7 +412,7 @@ struct ExprTokenType  // Something in the compiler hates the name TokenType, so 
 		object = aValue;
 	}
 
-	void Unset(UnsetKind aKind = UnsetKind::Unspecified)
+	void Unset(UnsetKind aKind = UnsetKind::Unset)
 	{
 		symbol = SYM_MISSING;
 		unset_kind = aKind;
@@ -498,7 +496,7 @@ struct ResultToken : public ExprTokenType
 		ExprTokenType::Unset(UnsetKind::Blank);
 	}
 
-	void Unset(UnsetKind aKind = UnsetKind::Unspecified)
+	void Unset(UnsetKind aKind = UnsetKind::Unset)
 	{
 		ASSERT(!mem_to_free && symbol != SYM_OBJECT);
 		ExprTokenType::Unset(aKind);

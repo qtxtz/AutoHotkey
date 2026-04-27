@@ -407,7 +407,8 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 #define _f_return_p(...)		_f__ret(_f_set_retval_p(__VA_ARGS__)) // Return a string which is already in persistent memory.
 #define _f_return_retval		return  // Return the value set by _f_set_retval().
 #define _f_return_empty			_f_return_p(_T(""), 0)
-#define _f_return_unset			_f__ret(aResultToken.Unset(UnsetKind::Unset))
+#define _f_return_unset			_f__ret(aResultToken.Unset(UnsetKind::Unset)) // Follows v2.1 rules.
+#define _f_return_unset_blank	_f__ret(aResultToken.Unset(UnsetKind::Blank)) // Reverts to "" in v2.0 mode.
 #define _f_retval_buf			(aResultToken.buf)
 #define _f_retval_buf_size		MAX_NUMBER_SIZE
 #define _f_number_buf			_f_retval_buf  // An alias to show intended usage, and in case the buffer size is changed.
@@ -427,10 +428,9 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 #define _o_return_FAIL			_f_return_FAIL
 #define _o_return_retval		_f_return_retval
 #define _o_return_empty			_f_return_empty
-#define _o_return_unset_blank	_o__ret(aResultToken.Unset(UnsetKind::Blank)) // Reverts to "" in v2.0 mode.
 #define _o_return_unset_(K)		_o__ret(ASSERT(aResultToken.symbol == SYM_MISSING); aResultToken.unset_kind = (K))
-#define _o_return_unset			_o_return_unset_(UnsetKind::Unset) // ExpandExpression throws UnsetError if unset is not permitted.
-#define _o_return_unset_item	_o_return_unset_(UnsetKind::UnsetItem) // ExpandExpression throws UnsetItemError if unset is not permitted.
+#define _o_return_unset_blank	_o_return_unset_(UnsetKind::Blank) // Reverts to "" in v2.0 mode.
+#define _o_return_unset			_o_return_unset_(UnsetKind::Unset) // Follows v2.1 rules.
 
 
 struct LoopFilesStruct : WIN32_FIND_DATA
