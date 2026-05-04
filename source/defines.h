@@ -383,6 +383,7 @@ struct ExprTokenType  // Something in the compiler hates the name TokenType, so 
 	ExprTokenType(double aValue) { SetValue(aValue); }
 	ExprTokenType(IObject *aValue) { SetValue(aValue); }
 	ExprTokenType(LPTSTR aValue, size_t aLength = -1) { SetValue(aValue, aLength); }
+	ExprTokenType(UnsetKind aValue) { Unset(aValue); }
 	
 	void SetValue(__int64 aValue)
 	{

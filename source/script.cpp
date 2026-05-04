@@ -5067,12 +5067,6 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 		mIgnoreNextBlockBegin = false;
 		return OK;
 	}
-	if (aActionType == ACT_RETURN && !aArgc && g->CurrentFunc && g->CurrentFunc->mBackCompatMode) // ACT_RETURN without args returns unset, so v2.0 mode needs the following.
-	{
-		aArg = (LPTSTR*)_alloca(sizeof(LPTSTR*));
-		*aArg = _T("\"\"");
-		aArgc = 1;
-	}
 
 	DerefList deref;  // Will be used to temporarily store the var-deref locations in each arg.
 	ArgStruct *new_arg;  // We will allocate some dynamic memory for this, then hang it onto the new line.
@@ -5180,8 +5174,13 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 	// checkers which can operate while the user is editing, before they try to run the script.
 	if (aActionType == ACT_RETURN)
 	{
-		if (aArgc > 0 && !g->CurrentFunc)
-			return ScriptError(_T("Return's parameter should be blank except inside a function."));
+		if (aArgc > 0)
+		{
+			if (g->CurrentFunc)
+				g->CurrentFunc->mHasExplicitReturn = true;
+			else
+				return ScriptError(_T("Return's parameter should be blank except inside a function."));
+		}
 	}
 	
 	if (mNextLineIsFunctionBody)
@@ -7864,6 +7863,29 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 					return line->PreparseError(ERR_BAD_JUMP_INSIDE_FINALLY);
 				else if (parent->mActionType == ACT_BLOCK_BEGIN && parent->mAttribute)
 					break; // Allow "return" to be used inside a nested function or fat arrow function.
+			if (!line->mArgc && g->CurrentFunc && (g->CurrentFunc->mHasExplicitReturn || g->CurrentFunc->mBackCompatMode))
+			{
+				if (g->CurrentFunc->mBackCompatMode)
+				{
+					// This forces `return` in a v2.0 function to return "" rather than UnsetKind::Blank,
+					// so callers in v2.1 mode receive "".  This is done because v2.0 functions may rely
+					// on the return of "" being implied even when the function can return other values.
+					static ExprTokenType sEmptyEx{ _T(""), 0 };
+					static ArgStruct sEmpty{ ARG_TYPE_NORMAL, false, 0, _T(""), nullptr, &sEmptyEx };
+					line->mArg = &sEmpty;
+				}
+				else // mHasExplicitReturn
+				{
+					// This forces `return` in v2.1 mode to act as `return unset` if the function uses
+					// return with a parameter at all (i.e. a function which never specifies a return
+					// value will return UnsetKind::Blank).  This is mainly so that X() => Y() and
+					// similar will throw UnsetError() if Y is capable of returning a value but doesn't.
+					static ExprTokenType sUnsetEx { UnsetKind::Unset };
+					static ArgStruct sUnset{ ARG_TYPE_NORMAL, false, 0, _T("unset"), nullptr, &sUnsetEx };
+					line->mArg = &sUnset;
+				}
+				line->mArgc = 1;
+			}
 			break;
 
 		case ACT_CATCH:
@@ -9803,6 +9825,12 @@ end_of_infix_to_postfix:
 
 ResultType Line::FinalizeExpression(ArgStruct &aArg)
 {
+	if (!aArg.max_stack)
+	{
+		ASSERT(!aArg.is_expression);
+		return OK;
+	}
+
 	auto stack = (ExprTokenType **)_alloca(aArg.max_stack * sizeof(ExprTokenType **));
 	int stack_count = 0;
 	// stack_count checks: Since missing operands are caught at an earlier stage, it doesn't
@@ -10940,8 +10968,14 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 		case ACT_BLOCK_END:
 			// v2.1: This is handled at runtime rather than by inserting ACT_RETURN to avoid complications
 			// with 1) auto-generated __Init methods, and 2) #Warn Unreachable.
-			if (line->mAttribute && ((UserFunc*)line->mAttribute)->mBackCompatMode && aResultToken)
-				aResultToken->SetValue(_T(""), 0);
+			if (line->mAttribute && aResultToken)
+			{
+				auto func = (UserFunc*)line->mAttribute;
+				if (func->mBackCompatMode)
+					aResultToken->SetValue(_T(""), 0);
+				else if (func->mHasExplicitReturn)
+					aResultToken->Unset();
+			}
 			// v2: This check is disabled to reduce code size, as it doesn't seem to be needed
 			// now that GOSUB has been removed.  Validation in PreparseBlocks() should make it
 			// impossible to produce this condition:

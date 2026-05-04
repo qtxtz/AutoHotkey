@@ -1509,6 +1509,7 @@ public:
 	inline bool IsFatArrow() { return mIsFuncExpression == FuncDefFatArrow || mIsFuncExpression == FuncDefFatArrowStandalone; }
 	bool mIsStatic = false; // Whether the "static" keyword was used with a function (not method); this prevents a nested function from becoming a closure.
 	bool mBackCompatMode; // true = requires v2.0, false = requires v2.1
+	bool mHasExplicitReturn = false;
 #define VAR_DECLARE_GLOBAL (VAR_DECLARED | VAR_GLOBAL)
 #define VAR_DECLARE_LOCAL  (VAR_DECLARED | VAR_LOCAL)
 #define VAR_DECLARE_STATIC (VAR_DECLARED | VAR_LOCAL | VAR_LOCAL_STATIC)
