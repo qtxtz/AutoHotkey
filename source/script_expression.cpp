@@ -277,9 +277,16 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 					}
 					else if (this_token.var_usage == VARREF_LVALUE_MAYBE)
 					{
-						// Skip the short-circuit operator and push the variable onto the stack for assignment.
-						++this_postfix;
-						ASSERT(this_postfix->symbol == SYM_OR_MAYBE);
+						if (this_postfix[1].symbol == SYM_OR_MAYBE)
+						{
+							// Skip the short-circuit operator and push the variable onto the stack for assignment.
+							++this_postfix;
+						}
+						else
+						{
+							ASSERT(this_postfix[1].symbol == SYM_MAYBE);
+							this_token.Unset();
+						}
 					}
 				}
 			}
@@ -692,8 +699,9 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 				continue; // Continue on to evaluate the right branch.
 			if (this_token.symbol == SYM_MAYBE)
 			{
-				++stack_count; // Put unset back on the stack.
 				this_postfix = this_token.circuit_token;
+				stack_count -= this_token.pop_count;
+				STACK_PUSH(&right); // Put unset back on the stack.
 				continue;
 			}
 			if (this_token.symbol != SYM_ASSIGN) // Anything other than := is not permitted.
