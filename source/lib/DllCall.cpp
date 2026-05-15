@@ -1180,9 +1180,9 @@ has_valid_return_type:
 			if (!obj) // It's null if the caller passed a struct of the right type.
 				break;
 			FuncResult result_token;
-			auto result = obj->Invoke(result_token, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), ExprTokenType(obj), nullptr, 0);
+			result = obj->Invoke(result_token, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), ExprTokenType(obj), nullptr, 0);
 			if (result_token.Exited())
-				return;
+				break;
 			if (result == INVOKE_NOT_HANDLED)
 			{
 				result = output_var.AssignSkipAddRef(obj);
