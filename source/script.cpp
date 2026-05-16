@@ -9378,7 +9378,7 @@ unquoted_literal:
 							//  (v := ...a?...)?  ; circuit_token must be reset in this case.
 							this_infix->circuit_token = nullptr; // Reset for next phase.
 						}
-						else
+						else if (sym_postfix == SYM_FUNC || sym_postfix == sym_prev) // Exclude cases like !a.b ?? c, which would need a short-circuit SYM_MAYBE between a.b and !, i.e. !(a.b?) ?? c
 						{
 							if (sym_prev == SYM_VAR || sym_prev == SYM_DYNAMIC)
 							{
